@@ -1,0 +1,41 @@
+#include <meshtools/models/model.hpp>
+
+#include <meshtools/logging.hpp>
+#include <meshtools/string.hpp>
+
+#include "./gltf/gltf_impl.hpp"
+#include "./obj/model.hpp"
+
+#include <filesystem>
+
+namespace meshtools::models {
+
+ModelLoadResult Model::Load(const std::filesystem::path& path) {
+    auto loadModel = [](const auto& path) -> ModelLoadResult {
+        if (string::endsWith(path.string(), ".obj")) {
+            return obj::loadModel(path);
+        } else if (string::endsWith(path.string(), ".gltf") || string::endsWith(path.string(), ".glb")) {
+            //            return gltf::LoadModel(path);
+        }
+
+        return ModelLoadResult{std::string{"Unknown model format: "} + path.c_str()};
+    };
+
+    auto loadResult = loadModel(path);
+
+    if (!loadResult) {
+        logging::error("Could not load model {}", path.c_str());
+    }
+
+    return loadResult;
+}
+
+void Model::dump(const xatlas::Atlas& atlas, const Image& aoMap, const std::filesystem::path& file) const {
+    if (string::endsWith(file.string(), ".obj")) {
+        obj::dump(*this, atlas, aoMap, file);
+    } else if (string::endsWith(file.string(), ".gltf") || string::endsWith(file.string(), ".glb")) {
+        //            return gltf::LoadModel(path);
+    }
+}
+
+} // namespace meshtools::models

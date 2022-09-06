@@ -1,0 +1,22 @@
+# Clang tidy
+
+if (ENABLE_CLANG_TIDY)
+    find_program(CLANG_TIDY NAMES "clang-tidy" DOC "Path to clang-tidy executable")
+    if (NOT CLANG_TIDY)
+        message(STATUS "clang-tidy not found.")
+    else ()
+        message(STATUS "clang-tidy found: ${CLANG_TIDY}")
+        if (ENABLE_CLANG_TIDY_FIX)
+            set(CLANG_TIDY_CMD "${CLANG_TIDY}" "-fix;-fix-errors")
+        else()
+            set(CLANG_TIDY_CMD "${CLANG_TIDY}")
+        endif()
+    endif ()
+endif ()
+
+macro(CLANG_TIDY TARGET)
+    if (ENABLE_CLANG_TIDY AND CLANG_TIDY_CMD)
+        message(STATUS "clang-tidy: ${TARGET}")
+        set_target_properties(${TARGET} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_CMD}")
+    endif ()
+endmacro(CLANG_TIDY)
