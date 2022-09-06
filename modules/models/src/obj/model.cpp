@@ -48,7 +48,7 @@ ModelLoadResult loadModel(const std::filesystem::path& file) {
     return result;
 }
 
-void dump(const Model& model, const xatlas::Atlas& atlas, const Image& aoMap, const std::filesystem::path& file) {
+void dump(const Model& model, const Image& aoMap, const std::filesystem::path& file) {
     if (!file::parentDirExists(file)) {
         logging::error("Directory for {} does not exist", file.c_str());
         return;
@@ -58,10 +58,7 @@ void dump(const Model& model, const xatlas::Atlas& atlas, const Image& aoMap, co
 
     size_t vertexCountBase = 0;
     for (size_t i = 0; i < model.meshes().size(); i++) {
-        auto* atlasMesh = atlas.meshes + i;
         auto& modelMesh = model.meshes()[i];
-        float uscale = 1.f / atlas.width;
-        float vscale = 1.f / atlas.height;
         if (modelMesh.name().empty()) {
             fprintf(outobj, "o Object-%zu\n", i);
         } else {
@@ -69,36 +66,38 @@ void dump(const Model& model, const xatlas::Atlas& atlas, const Image& aoMap, co
         }
 
         // Vertex data
-        for (int nvert = 0; nvert < atlasMesh->vertexCount; nvert++) {
-            const auto& ivert = atlasMesh->vertexArray[nvert];
-            const auto& position = modelMesh.positions()[ivert.xref];
+        for (size_t nvert = 0; nvert < modelMesh.positions().size(); nvert++) {
+            const auto& position = modelMesh.positions()[nvert];
 
             // Position
             fprintf(outobj, "v %f %f %f\n", position[0], position[1], position[2]);
 
             // Normal
             if (!modelMesh.normals().empty()) {
-                const auto& normal = modelMesh.normals()[ivert.xref];
+                const auto& normal = modelMesh.normals()[nvert];
                 fprintf(outobj, "vn %f %f %f\n", normal[0], normal[1], normal[2]);
             }
 
             // UV
-            fprintf(outobj, "vt %f %f\n", ivert.uv[0] * uscale, 1 - ivert.uv[1] * vscale);
+            if (!modelMesh.texcoords().empty()) {
+                const auto& uv = modelMesh.texcoords()[nvert];
+                fprintf(outobj, "vt %f %f\n", uv[0], uv[1]);
+            }
         }
 
         // Faces
         fprintf(outobj, "s %d\n", 0);
-        for (int nface = 0; nface < atlasMesh->indexCount / 3; nface++) {
-            int a = vertexCountBase + atlasMesh->indexArray[nface * 3] + 1;
-            int b = vertexCountBase + atlasMesh->indexArray[nface * 3 + 1] + 1;
-            int c = vertexCountBase + atlasMesh->indexArray[nface * 3 + 2] + 1;
+        for (int nface = 0; nface < modelMesh.indices().size() / 3; nface++) {
+            int a = vertexCountBase + modelMesh.indices()[nface * 3] + 1;
+            int b = vertexCountBase + modelMesh.indices()[nface * 3 + 1] + 1;
+            int c = vertexCountBase + modelMesh.indices()[nface * 3 + 2] + 1;
             if (modelMesh.normals().empty()) {
                 fprintf(outobj, "f %d/%d %d/%d %d/%d\n", a, a, b, b, c, c);
             } else {
                 fprintf(outobj, "f %d/%d/%d %d/%d/%d %d/%d/%d\n", a, a, a, b, b, b, c, c, c);
             }
         }
-        vertexCountBase += atlasMesh->vertexCount;
+        vertexCountBase += modelMesh.positions().size();
     }
 }
 

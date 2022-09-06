@@ -5,8 +5,6 @@
 #include <meshtools/vec2.hpp>
 #include <meshtools/vec3.hpp>
 
-#include <xatlas.h>
-
 #include <filesystem>
 #include <memory>
 #include <vector>
@@ -36,6 +34,10 @@ public:
         return texcoords_;
     }
 
+    void texcoords(std::vector<vec2> uvs) {
+        texcoords_ = std::move(uvs);
+    }
+
     const std::string& name() const {
         return name_;
     }
@@ -56,11 +58,15 @@ public:
 
     explicit Model(std::vector<Mesh> meshes) : meshes_(std::move(meshes)) {}
 
+    std::vector<Mesh>& meshes() {
+        return meshes_;
+    }
+
     const std::vector<Mesh>& meshes() const {
         return meshes_;
     }
 
-    void dump(const xatlas::Atlas& atlas, const Image& aoMap, const std::filesystem::path& file) const;
+    void dump(const Image& aoMap, const std::filesystem::path& file) const;
 
 private:
     std::vector<Mesh> meshes_;

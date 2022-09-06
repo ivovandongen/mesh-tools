@@ -8,8 +8,6 @@
 
 #include <embree3/rtcore.h>
 #include <embree3/rtcore_ray.h>
-#include <xatlas.h>
-
 
 #include <array>
 #include <cassert>
@@ -49,7 +47,7 @@ vec3 random_direction(std::mt19937& rnd) {
     return {r * cosf(t), r * sinf(t), z};
 }
 
-Result<Image> raytrace(const models::Model& model, const xatlas::Atlas& atlas, RaytraceOptions options) {
+Result<Image> raytrace(const models::Model& model, const uv::Atlas& atlas, RaytraceOptions options) {
 
     logging::debug("Ray trace - setting up scene");
 
@@ -83,7 +81,7 @@ Result<Image> raytrace(const models::Model& model, const xatlas::Atlas& atlas, R
 
     rtcCommitScene(scene);
 
-    auto image = std::make_shared<Image>(atlas.width, atlas.height, options.resultChannels);
+    auto image = std::make_shared<Image>(atlas.width(), atlas.height(), options.resultChannels);
     const float E = 0.5f;
     std::vector<RTCRay> rays;
     rays.resize(options.nsamples);
@@ -99,37 +97,37 @@ Result<Image> raytrace(const models::Model& model, const xatlas::Atlas& atlas, R
         randomDirs.push_back(random_direction(rnd));
     }
 
-    for (size_t meshIdx = 0; meshIdx < atlas.meshCount; meshIdx++) {
-        xatlas::Mesh* atlasMesh = atlas.meshes + meshIdx;
-        logging::debug("Ray trace - tracing {} triangles", atlasMesh->indexCount / 3);
+    for (size_t meshIdx = 0; meshIdx < atlas.meshCount(); meshIdx++) {
+        auto indexCount = atlas.indexCount(meshIdx);
+        logging::debug("Ray trace - tracing {} triangles", indexCount / 3);
 
-        for (uint32_t j = 0; j < atlasMesh->indexCount; j += 3) {
-            std::array<xatlas::Vertex*, 3> triangle{};
+        for (uint32_t j = 0; j < indexCount; j += 3) {
+            std::array<uv::Vertex, 3> triangle{};
             for (int k = 0; k < 3; k++) {
-                triangle[k] = &atlasMesh->vertexArray[atlasMesh->indexArray[j + k]];
+                triangle[k] = atlas.vertex(meshIdx, j + k);
             }
-            if (!triangle[0]->uv[0] && !triangle[0]->uv[1] && !triangle[1]->uv[0] && !triangle[1]->uv[1] && !triangle[2]->uv[0] &&
-                !triangle[2]->uv[1]) {
+            if (!triangle[0].uv[0] && !triangle[0].uv[1] && !triangle[1].uv[0] && !triangle[1].uv[1] && !triangle[2].uv[0] &&
+                !triangle[2].uv[1]) {
                 continue; // Skip triangles that weren't atlased.
             }
 
-            const auto& uv0v = vec3{triangle[0]->uv[0], triangle[0]->uv[1], 0};
-            const auto& uv1v = vec3{triangle[1]->uv[0], triangle[1]->uv[1], 0};
-            const auto& uv2v = vec3{triangle[2]->uv[0], triangle[2]->uv[1], 0};
+            const auto& uv0v = vec3{triangle[0].uv[0], triangle[0].uv[1], 0};
+            const auto& uv1v = vec3{triangle[1].uv[0], triangle[1].uv[1], 0};
+            const auto& uv2v = vec3{triangle[2].uv[0], triangle[2].uv[1], 0};
 
             const auto& modelMesh = model.meshes()[meshIdx];
 
-            auto v0 = *(modelMesh.positions().data() + triangle[0]->xref);
-            auto v1 = *(modelMesh.positions().data() + triangle[1]->xref);
-            auto v2 = *(modelMesh.positions().data() + triangle[2]->xref);
+            auto v0 = *(modelMesh.positions().data() + triangle[0].xref);
+            auto v1 = *(modelMesh.positions().data() + triangle[1].xref);
+            auto v2 = *(modelMesh.positions().data() + triangle[2].xref);
 
-            auto n0 = *(modelMesh.normals().data() + triangle[0]->xref);
-            auto n1 = *(modelMesh.normals().data() + triangle[1]->xref);
-            auto n2 = *(modelMesh.normals().data() + triangle[2]->xref);
+            auto n0 = *(modelMesh.normals().data() + triangle[0].xref);
+            auto n1 = *(modelMesh.normals().data() + triangle[1].xref);
+            auto n2 = *(modelMesh.normals().data() + triangle[2].xref);
 
-            std::array<int, 2> uv0{static_cast<int>(triangle[0]->uv[0]), static_cast<int>(triangle[0]->uv[1])};
-            std::array<int, 2> uv1{static_cast<int>(triangle[1]->uv[0]), static_cast<int>(triangle[1]->uv[1])};
-            std::array<int, 2> uv2{static_cast<int>(triangle[2]->uv[0]), static_cast<int>(triangle[2]->uv[1])};
+            std::array<int, 2> uv0{static_cast<int>(triangle[0].uv[0]), static_cast<int>(triangle[0].uv[1])};
+            std::array<int, 2> uv1{static_cast<int>(triangle[1].uv[0]), static_cast<int>(triangle[1].uv[1])};
+            std::array<int, 2> uv2{static_cast<int>(triangle[2].uv[0]), static_cast<int>(triangle[2].uv[1])};
 
             const constexpr int buffer = 0;
             RasterizeTriangle<buffer>(uv0, uv1, uv2, [&](auto x, auto y) {

@@ -30,9 +30,9 @@ ModelLoadResult Model::Load(const std::filesystem::path& path) {
     return loadResult;
 }
 
-void Model::dump(const xatlas::Atlas& atlas, const Image& aoMap, const std::filesystem::path& file) const {
+void Model::dump(const Image& aoMap, const std::filesystem::path& file) const {
     if (string::endsWith(file.string(), ".obj")) {
-        obj::dump(*this, atlas, aoMap, file);
+        obj::dump(*this, aoMap, file);
     } else if (string::endsWith(file.string(), ".gltf") || string::endsWith(file.string(), ".glb")) {
         //            return gltf::LoadModel(path);
     }

@@ -2,6 +2,7 @@
 #include <meshtools/image.hpp>
 #include <meshtools/logging.hpp>
 #include <meshtools/models/model.hpp>
+#include <meshtools/uv/atlas.hpp>
 
 #include <cxxopts.hpp>
 
@@ -72,14 +73,28 @@ int main(int argc, char** argv) {
 
     // Create UV Atlas
     logging::info("Create UV Atlas");
-    auto atlasResult = ao::createAtlas(*modelLoadResult.value);
+    // TODO: cmd line params for atlas create options
+    uv::AtlasCreateOptions atlasOptions{
+            .maxSize = 0,
+            .padding = 4,
+            .texelsPerUnit = 0,
+            .resolution = 512,
+            .blockAlign = true,
+            .bruteForce = false,
+    };
+    auto atlasResult = uv::Atlas::Create(*modelLoadResult.value, atlasOptions);
     if (!atlasResult) {
         logging::error("Could create UV atlas for model {}: {}", options.input.c_str(), atlasResult.error.c_str());
         return EXIT_FAILURE;
     }
 
+    // Apply atlas to model
+    logging::info("Applying UV Atlas");
+    atlasResult.value->apply(*modelLoadResult.value);
+
     // Bake AO
     logging::info("Baking AO");
+    // TODO: Make sure we bake npot textures / pre-defined texture sizes
     auto bakeResult = ao::bake(*modelLoadResult.value, *atlasResult.value, {});
     if (!bakeResult) {
         logging::error("Could bake AO for model {}: {}", options.input.c_str(), bakeResult.error.c_str());
@@ -98,7 +113,7 @@ int main(int argc, char** argv) {
         writePng(*bakeResult.value, options.outputTexture);
     }
     logging::info("Writing result to {}", options.output.c_str());
-    modelLoadResult.value->dump(*atlasResult.value->impl, *bakeResult.value, options.output);
+    modelLoadResult.value->dump(*bakeResult.value, options.output);
 
     return EXIT_SUCCESS;
 }

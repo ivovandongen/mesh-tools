@@ -3,9 +3,7 @@
 #include <meshtools/image.hpp>
 #include <meshtools/models/model.hpp>
 #include <meshtools/result.hpp>
-
-// XXX: Remove
-#include <xatlas.h>
+#include <meshtools/uv/atlas.hpp>
 
 namespace meshtools::ao {
 
@@ -17,15 +15,6 @@ struct BakeOptions {
     float multiply = 1.0;
 };
 
-struct Atlas {
-    Atlas();
-    ~Atlas();
-
-    xatlas::Atlas* impl;
-};
-
-Result<Atlas> createAtlas(const models::Model& model);
-
-Result<Image> bake(const models::Model& input, const Atlas& atlas, const BakeOptions& options = {});
+Result<Image> bake(const models::Model& input, const uv::Atlas& atlas, const BakeOptions& options = {});
 
 } // namespace meshtools::ao
