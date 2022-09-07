@@ -7,15 +7,20 @@
 
 namespace meshtools::ao {
 
-Result<Image> bake(const models::Model& model, const uv::Atlas& atlas, const BakeOptions& options) {
-    const constexpr uint8_t channels = 1;
-    const constexpr float maxFar = 5;
-    RaytraceOptions raytraceOptions{.nsamples = options.nsamples, .resultChannels = channels, .far = maxFar, .multiply = options.multiply};
-    auto raytraceResult = raytrace(model, atlas, raytraceOptions);
+inline RaytraceOptions createOptions(const BakeOptions& options) {
+    return {
+            .nsamples = options.nsamples,
+            .resultChannels = options.channels,
+            .far = options.maxFar,
+            .multiply = options.multiply,
+    };
+}
+
+Result<Image> bake(const models::Model& model, const Size<uint32_t>& mapSize, const BakeOptions& options) {
+    auto raytraceResult = raytrace(model, mapSize, createOptions(options));
     if (!raytraceResult) {
         return {std::move(raytraceResult.error)};
     }
-
     return {std::move(raytraceResult.value)};
 }
 

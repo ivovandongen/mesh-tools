@@ -3,7 +3,7 @@
 #include <meshtools/image.hpp>
 #include <meshtools/models/model.hpp>
 #include <meshtools/result.hpp>
-#include <meshtools/uv/atlas.hpp>
+#include <meshtools/size.hpp>
 
 #include <vector>
 
@@ -16,6 +16,6 @@ struct RaytraceOptions {
     float multiply;
 };
 
-Result<Image> raytrace(const models::Model& model, const uv::Atlas& atlas, RaytraceOptions = {});
+Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, RaytraceOptions = {});
 
 } // namespace meshtools::ao

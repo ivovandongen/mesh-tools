@@ -81,15 +81,23 @@ void Atlas::apply(models::Model& model) {
     const float vscale = 1.f / height();
 
     for (size_t i = 0; i < model.meshes().size(); i++) {
-        auto* atlasMesh = impl_->atlas_->meshes + i;
+        auto& atlasMesh = impl_->atlas_->meshes[i];
         auto& modelMesh = model.meshes()[i];
+        std::vector<vec3> positions;
+        std::vector<vec3> normals;
         std::vector<vec2> uvs;
-        uvs.resize(modelMesh.positions().size());
-        for (int nvert = 0; nvert < atlasMesh->vertexCount; nvert++) {
-            const auto& ivert = atlasMesh->vertexArray[nvert];
-            auto vertexIndex = ivert.xref;
-            uvs[vertexIndex] = {ivert.uv[0] * uscale, 1 - ivert.uv[1] * vscale};
+        positions.reserve(atlasMesh.vertexCount);
+        normals.reserve(atlasMesh.vertexCount);
+        uvs.reserve(atlasMesh.vertexCount);
+        for (size_t vert = 0; vert < atlasMesh.vertexCount; vert++) {
+            const auto& ivert = atlasMesh.vertexArray[vert];
+            positions.push_back(modelMesh.positions()[ivert.xref]);
+            normals.push_back(modelMesh.normals()[ivert.xref]);
+            uvs.push_back({ivert.uv[0] * uscale, 1 - ivert.uv[1] * vscale});
         }
+        modelMesh.indices({atlasMesh.indexArray, atlasMesh.indexArray + atlasMesh.indexCount});
+        modelMesh.positions(std::move(positions));
+        modelMesh.normals(std::move(normals));
         modelMesh.texcoords(std::move(uvs));
     }
 }
@@ -115,6 +123,5 @@ Vertex Atlas::vertex(size_t meshIdx, size_t indexIdx) const {
     auto* xVertex = &atlasMesh->vertexArray[atlasMesh->indexArray[indexIdx]];
     return {{xVertex->uv[0], xVertex->uv[1]}, xVertex->xref};
 }
-
 
 } // namespace meshtools::uv

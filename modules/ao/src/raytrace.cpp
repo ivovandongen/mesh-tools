@@ -24,21 +24,6 @@ T sign(std::array<T, 2> p1, std::array<T, 2> p2, std::array<T, 2> p3) {
     return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1]);
 }
 
-template<class T>
-bool pointInTriangle(std::array<T, 2> pt, std::array<T, 2> v1, std::array<T, 2> v2, std::array<T, 2> v3) {
-    T d1, d2, d3;
-    bool has_neg, has_pos;
-
-    d1 = sign(pt, v1, v2);
-    d2 = sign(pt, v2, v3);
-    d3 = sign(pt, v3, v1);
-
-    has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
-    has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
-
-    return !(has_neg && has_pos);
-}
-
 // http://www.altdevblogaday.com/2012/05/03/generating-uniformly-distributed-points-on-sphere/
 vec3 random_direction(std::mt19937& rnd) {
     float z = 2.0f * rnd() / std::mt19937::max() - 1.0f;
@@ -47,7 +32,10 @@ vec3 random_direction(std::mt19937& rnd) {
     return {r * cosf(t), r * sinf(t), z};
 }
 
-Result<Image> raytrace(const models::Model& model, const uv::Atlas& atlas, RaytraceOptions options) {
+Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, RaytraceOptions options) {
+    if (std::any_of(model.meshes().begin(), model.meshes().end(), [](const models::Mesh& mesh) { return mesh.texcoords().empty(); })) {
+        return {"Cannot raytrace models without texture coordinates"};
+    }
 
     logging::debug("Ray trace - setting up scene");
 
@@ -81,7 +69,10 @@ Result<Image> raytrace(const models::Model& model, const uv::Atlas& atlas, Raytr
 
     rtcCommitScene(scene);
 
-    auto image = std::make_shared<Image>(atlas.width(), atlas.height(), options.resultChannels);
+    auto image = std::make_shared<Image>(size.width, size.width, options.resultChannels);
+    const float uscale = size.width;
+    const float vscale = size.height;
+
     const float E = 0.5f;
     std::vector<RTCRay> rays;
     rays.resize(options.nsamples);
@@ -97,57 +88,67 @@ Result<Image> raytrace(const models::Model& model, const uv::Atlas& atlas, Raytr
         randomDirs.push_back(random_direction(rnd));
     }
 
-    for (size_t meshIdx = 0; meshIdx < atlas.meshCount(); meshIdx++) {
-        auto indexCount = atlas.indexCount(meshIdx);
+    for (const auto& mesh : model.meshes()) {
+        assert(!mesh.texcoords().empty());
+        assert(mesh.positions().size() == mesh.texcoords().size());
+        auto indexCount = mesh.indices().size();
         logging::debug("Ray trace - tracing {} triangles", indexCount / 3);
 
         for (uint32_t j = 0; j < indexCount; j += 3) {
-            std::array<uv::Vertex, 3> triangle{};
-            for (int k = 0; k < 3; k++) {
-                triangle[k] = atlas.vertex(meshIdx, j + k);
+            //            logging::debug("Rasterizing {}/{}", j / 3, indexCount / 3);
+            struct Vertex {
+                Vertex(vec3 pos, vec3 norm, vec2 tex)
+                    : position(pos), normal(norm), uv(tex), uv3({tex[0], tex[1], 0.0f}),
+                      uv2i({static_cast<int>(tex[0]), static_cast<int>(tex[1])}){
+
+                      };
+                Vertex() = default;
+
+                vec3 position;
+                vec3 normal;
+                vec2 uv;
+                vec3 uv3;
+                std::array<int, 2> uv2i;
+            };
+            std::array<Vertex, 3> triangle{};
+            for (size_t k = 0; k < 3; k++) {
+                auto index = mesh.indices()[j + k];
+                assert(mesh.texcoords().size() > index);
+                auto uv = mesh.texcoords()[index];
+                uv[0] *= uscale;
+                uv[1] = (1 - uv[1]) * vscale;
+                assert(uv[0] <= image->width());
+                assert(uv[1] <= image->height());
+                triangle[k] = {mesh.positions()[index], mesh.normals()[index], uv};
             }
-            if (!triangle[0].uv[0] && !triangle[0].uv[1] && !triangle[1].uv[0] && !triangle[1].uv[1] && !triangle[2].uv[0] &&
-                !triangle[2].uv[1]) {
+
+            if (!triangle[0].uv3[0] && !triangle[0].uv3[1] && !triangle[1].uv3[0] && !triangle[1].uv3[1] && !triangle[2].uv3[0] &&
+                !triangle[2].uv3[1]) {
                 continue; // Skip triangles that weren't atlased.
             }
 
-            const auto& uv0v = vec3{triangle[0].uv[0], triangle[0].uv[1], 0};
-            const auto& uv1v = vec3{triangle[1].uv[0], triangle[1].uv[1], 0};
-            const auto& uv2v = vec3{triangle[2].uv[0], triangle[2].uv[1], 0};
-
-            const auto& modelMesh = model.meshes()[meshIdx];
-
-            auto v0 = *(modelMesh.positions().data() + triangle[0].xref);
-            auto v1 = *(modelMesh.positions().data() + triangle[1].xref);
-            auto v2 = *(modelMesh.positions().data() + triangle[2].xref);
-
-            auto n0 = *(modelMesh.normals().data() + triangle[0].xref);
-            auto n1 = *(modelMesh.normals().data() + triangle[1].xref);
-            auto n2 = *(modelMesh.normals().data() + triangle[2].xref);
-
-            std::array<int, 2> uv0{static_cast<int>(triangle[0].uv[0]), static_cast<int>(triangle[0].uv[1])};
-            std::array<int, 2> uv1{static_cast<int>(triangle[1].uv[0]), static_cast<int>(triangle[1].uv[1])};
-            std::array<int, 2> uv2{static_cast<int>(triangle[2].uv[0]), static_cast<int>(triangle[2].uv[1])};
-
             const constexpr int buffer = 0;
-            RasterizeTriangle<buffer>(uv0, uv1, uv2, [&](auto x, auto y) {
+            RasterizeTriangle<buffer>(triangle[0].uv2i, triangle[1].uv2i, triangle[2].uv2i, [&](auto x, auto y) {
                 if (x < 0 || y < 0 || !(x < image->width()) || !(y < image->height())) {
                     return;
                 }
 
                 // Interpolate normal
-                auto bc = barycentric(uv0v, uv1v, uv2v, vec3{static_cast<float>(x), static_cast<float>(y), 0});
+                auto bc = barycentric(triangle[0].uv3,
+                                      triangle[1].uv3,
+                                      triangle[2].uv3,
+                                      vec3{static_cast<float>(x), static_cast<float>(y), 0});
                 vec3 normal{
-                        n0[0] * bc[0] + n1[0] * bc[1] + n2[0] * bc[2],
-                        n0[1] * bc[0] + n1[1] * bc[1] + n2[1] * bc[2],
-                        n0[2] * bc[0] + n1[2] * bc[1] + n2[2] * bc[2],
+                        triangle[0].normal[0] * bc[0] + triangle[1].normal[0] * bc[1] + triangle[2].normal[0] * bc[2],
+                        triangle[0].normal[1] * bc[0] + triangle[1].normal[1] * bc[1] + triangle[2].normal[1] * bc[2],
+                        triangle[0].normal[2] * bc[0] + triangle[1].normal[2] * bc[1] + triangle[2].normal[2] * bc[2],
                 };
                 normal = vec3Normalize(normal);
 
                 // Interpolate origin
-                vec3 org{v0[0] * bc[0] + v1[0] * bc[1] + v2[0] * bc[2],
-                         v0[1] * bc[0] + v1[1] * bc[1] + v2[1] * bc[2],
-                         v0[2] * bc[0] + v1[2] * bc[1] + v2[2] * bc[2]};
+                vec3 org{triangle[0].position[0] * bc[0] + triangle[1].position[0] * bc[1] + triangle[2].position[0] * bc[2],
+                         triangle[0].position[1] * bc[0] + triangle[1].position[1] * bc[1] + triangle[2].position[1] * bc[2],
+                         triangle[0].position[2] * bc[0] + triangle[1].position[2] * bc[1] + triangle[2].position[2] * bc[2]};
 
                 // Prepare rays to shoot through the differential hemisphere.
                 for (size_t i = 0; i < rays.size(); i++) {

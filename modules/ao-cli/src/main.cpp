@@ -14,6 +14,7 @@ struct Options {
     std::filesystem::path input;
     std::filesystem::path output;
     std::filesystem::path outputTexture;
+    uint32_t resolution;
     uint8_t blurKernelSize;
     bool verbose;
 };
@@ -25,6 +26,7 @@ Options parseOpts(int argc, char** argv) {
     options.add_options()
             ("i,input", "Input model file", cxxopts::value<std::string>())
             ("o,output", "Output model file", cxxopts::value<std::string>())
+            ("r,resolution", "Output texture resolution", cxxopts::value<uint32_t>()->default_value("0"))
             ("output-texture", "Output texture file separately", cxxopts::value<std::string>()->default_value(""))
             ("b,blur", "Blur kernel size", cxxopts::value<uint8_t>()->default_value("5"))
             ("v,verbose", "Speak up!", cxxopts::value<bool>()->default_value("false"))
@@ -42,6 +44,7 @@ Options parseOpts(int argc, char** argv) {
                 result["input"].as<std::string>(),
                 result["output"].as<std::string>(),
                 result["output-texture"].as<std::string>(),
+                result["resolution"].as<uint32_t>(),
                 result["blur"].as<uint8_t>(),
                 result["verbose"].as<bool>(),
         };
@@ -71,31 +74,40 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    // Create UV Atlas
-    logging::info("Create UV Atlas");
-    // TODO: cmd line params for atlas create options
-    uv::AtlasCreateOptions atlasOptions{
-            .maxSize = 0,
-            .padding = 4,
-            .texelsPerUnit = 0,
-            .resolution = 512,
-            .blockAlign = true,
-            .bruteForce = false,
-    };
-    auto atlasResult = uv::Atlas::Create(*modelLoadResult.value, atlasOptions);
-    if (!atlasResult) {
-        logging::error("Could create UV atlas for model {}: {}", options.input.c_str(), atlasResult.error.c_str());
-        return EXIT_FAILURE;
+    auto resolution = options.resolution > 0 ? Size<uint32_t>{options.resolution, options.resolution} : Size<uint32_t>{};
+    {
+        // Create UV Atlas
+        auto atlasRes = resolution.width > 0 ? resolution.width : 512;
+        logging::info("Create UV Atlas. Resolution {}x{}", atlasRes, atlasRes);
+        // TODO: cmd line params for atlas create options
+        uv::AtlasCreateOptions atlasOptions{
+                .maxSize = 0,
+                .padding = 4,
+                .texelsPerUnit = 0,
+                .resolution = atlasRes,
+                .blockAlign = true,
+                .bruteForce = false,
+        };
+        auto atlasResult = uv::Atlas::Create(*modelLoadResult.value, atlasOptions);
+        if (!atlasResult) {
+            logging::error("Could create UV atlas for model {}: {}", options.input.c_str(), atlasResult.error.c_str());
+            return EXIT_FAILURE;
+        }
+
+        logging::info("Created UV Atlas. Resolution {}x{}", atlasResult.value->width(), atlasResult.value->height());
+        if (resolution.width == 0) {
+            // If resolution was not explicitly set, use the atlas's native resolution
+            resolution = {atlasResult.value->width(), atlasResult.value->height()};
+        }
+
+        // Apply atlas to model
+        logging::info("Applying UV Atlas");
+        atlasResult.value->apply(*modelLoadResult.value);
     }
 
-    // Apply atlas to model
-    logging::info("Applying UV Atlas");
-    atlasResult.value->apply(*modelLoadResult.value);
-
     // Bake AO
-    logging::info("Baking AO");
-    // TODO: Make sure we bake npot textures / pre-defined texture sizes
-    auto bakeResult = ao::bake(*modelLoadResult.value, *atlasResult.value, {});
+    logging::info("Baking AO. Resolution {}x{}", resolution.width, resolution.height);
+    auto bakeResult = ao::bake(*modelLoadResult.value, resolution, {});
     if (!bakeResult) {
         logging::error("Could bake AO for model {}: {}", options.input.c_str(), bakeResult.error.c_str());
         return EXIT_FAILURE;

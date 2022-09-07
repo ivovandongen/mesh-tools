@@ -22,17 +22,30 @@ public:
         return indices_;
     };
 
+    void indices(std::vector<uint32_t> indices) {
+        indices_ = std::move(indices);
+    };
+
     const std::vector<vec3>& positions() const {
         return positions_;
+    };
+
+    void positions(std::vector<vec3> positions) {
+        positions_ = std::move(positions);
     };
 
     const std::vector<vec3>& normals() const {
         return normals_;
     }
 
+    void normals(std::vector<vec3> normals) {
+        normals_ = std::move(normals);
+    };
+
     const std::vector<vec2>& texcoords() const {
         return texcoords_;
     }
+
 
     void texcoords(std::vector<vec2> uvs) {
         texcoords_ = std::move(uvs);
