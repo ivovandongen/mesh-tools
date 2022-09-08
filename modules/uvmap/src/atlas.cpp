@@ -71,8 +71,12 @@ Result<Atlas> Atlas::Create(const models::Model& model, const AtlasCreateOptions
                       .bilinear = options.bilinear,
                       .blockAlign = options.blockAlign,
                       .bruteForce = options.bruteForce});
-    logging::debug("Atlas generated {}x{}, utilization: {}", atlas->width, atlas->height, *atlas->utilization);
 
+    if (atlas->chartCount == 0) {
+        return {"Something went wrong generating the atlas"};
+    }
+
+    logging::debug("Atlas generated {}x{}, utilization: {}", atlas->width, atlas->height, *atlas->utilization);
     return result;
 }
 
