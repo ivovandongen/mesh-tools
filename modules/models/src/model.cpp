@@ -3,7 +3,7 @@
 #include <meshtools/logging.hpp>
 #include <meshtools/string.hpp>
 
-#include "./gltf/gltf_impl.hpp"
+#include "./gltf/model.hpp"
 #include "./obj/model.hpp"
 
 #include <filesystem>
@@ -15,7 +15,7 @@ ModelLoadResult Model::Load(const std::filesystem::path& path) {
         if (string::endsWith(path.string(), ".obj")) {
             return obj::loadModel(path);
         } else if (string::endsWith(path.string(), ".gltf") || string::endsWith(path.string(), ".glb")) {
-            //            return gltf::LoadModel(path);
+            return gltf::LoadModel(path);
         }
 
         return ModelLoadResult{std::string{"Unknown model format: "} + path.c_str()};
@@ -34,7 +34,7 @@ void Model::dump(const Image& aoMap, const std::filesystem::path& file) const {
     if (string::endsWith(file.string(), ".obj")) {
         obj::dump(*this, aoMap, file);
     } else if (string::endsWith(file.string(), ".gltf") || string::endsWith(file.string(), ".glb")) {
-        //            return gltf::LoadModel(path);
+        gltf::dump(*this, aoMap, file);
     }
 }
 

@@ -24,7 +24,6 @@ ModelLoadResult loadModel(const std::filesystem::path& file) {
     std::vector<tinyobj::material_t> materials;
     std::string error;
     auto loaded = tinyobj::LoadObj(shapes, materials, error, file.c_str());
-    //    auto loaded = tinyobj::LoadObj(shapes, materials, error, file.c_str(), nullptr, 0u);
 
     ModelLoadResult result;
 

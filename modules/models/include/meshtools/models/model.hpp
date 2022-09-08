@@ -70,6 +70,8 @@ public:
 
     explicit Model(std::vector<Mesh> meshes) : meshes_(std::move(meshes)) {}
 
+    explicit Model() = default;
+
     std::vector<Mesh>& meshes() {
         return meshes_;
     }
