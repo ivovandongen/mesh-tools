@@ -34,14 +34,14 @@ Result<Atlas> Atlas::Create(const models::Model& model, const AtlasCreateOptions
         xatlas::MeshDecl meshDecl;
         meshDecl.vertexCount = (uint32_t) mesh.positions().size();
         meshDecl.vertexPositionData = mesh.positions().data();
-        meshDecl.vertexPositionStride = sizeof(vec3);
+        meshDecl.vertexPositionStride = sizeof(glm::vec3);
         if (!mesh.normals().empty()) {
             meshDecl.vertexNormalData = mesh.normals().data();
-            meshDecl.vertexNormalStride = sizeof(vec3);
+            meshDecl.vertexNormalStride = sizeof(glm::vec3);
         }
         if (!mesh.texcoords().empty()) {
             meshDecl.vertexUvData = mesh.texcoords().data();
-            meshDecl.vertexUvStride = sizeof(vec2);
+            meshDecl.vertexUvStride = sizeof(glm::vec2);
         }
         meshDecl.indexCount = (uint32_t) mesh.indices().size();
         meshDecl.indexData = mesh.indices().data();
@@ -83,9 +83,9 @@ void Atlas::apply(models::Model& model) {
     for (size_t i = 0; i < model.meshes().size(); i++) {
         auto& atlasMesh = impl_->atlas_->meshes[i];
         auto& modelMesh = model.meshes()[i];
-        std::vector<vec3> positions;
-        std::vector<vec3> normals;
-        std::vector<vec2> uvs;
+        std::vector<glm::vec3> positions;
+        std::vector<glm::vec3> normals;
+        std::vector<glm::vec2> uvs;
         positions.reserve(atlasMesh.vertexCount);
         normals.reserve(atlasMesh.vertexCount);
         uvs.reserve(atlasMesh.vertexCount);
@@ -93,7 +93,7 @@ void Atlas::apply(models::Model& model) {
             const auto& ivert = atlasMesh.vertexArray[vert];
             positions.push_back(modelMesh.positions()[ivert.xref]);
             normals.push_back(modelMesh.normals()[ivert.xref]);
-            uvs.push_back({ivert.uv[0] * uscale, 1 - ivert.uv[1] * vscale});
+            uvs.emplace_back(ivert.uv[0] * uscale, 1 - ivert.uv[1] * vscale);
         }
         modelMesh.indices({atlasMesh.indexArray, atlasMesh.indexArray + atlasMesh.indexCount});
         modelMesh.positions(std::move(positions));

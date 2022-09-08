@@ -1,19 +1,11 @@
 #pragma once
 
+#include <meshtools/math.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdlib>
-
-
-template<uint8_t Channels = 4>
-static void SetPixel(uint8_t* dest, int destWidth, int x, int y, const std::array<uint8_t, Channels>& color) {
-    uint8_t* pixel = &dest[x * Channels + y * (destWidth * Channels)];
-    for (size_t i = 0; i < Channels; i++) {
-        pixel[i] = color[i];
-    }
-}
-
 
 static void SetPixel(uint8_t* dest, int destWidth, int x, int y, const std::vector<uint8_t>& color) {
     const uint8_t channels = color.size();
@@ -24,8 +16,8 @@ static void SetPixel(uint8_t* dest, int destWidth, int x, int y, const std::vect
 }
 
 // https://github.com/ssloy/tinyrenderer/wiki/Lesson-2:-Triangle-rasterization-and-back-face-culling
-template<int buffer = 2, class Fn>
-static void RasterizeTriangle(std::array<int, 2> t0, std::array<int, 2> t1, std::array<int, 2> t2, Fn&& fn) {
+template<int buffer = 2, class P = glm::vec<2, int, glm::defaultp>, class Fn>
+static void RasterizeTriangle(P t0, P t1, P t2, Fn&& fn) {
     // Sort left to right
     if (t0[0] > t1[0])
         std::swap(t0, t1);
@@ -71,7 +63,7 @@ static void RasterizeTriangle(std::array<int, 2> t0, std::array<int, 2> t1, std:
         int segment_height = second_half ? t2[1] - t1[1] : t1[1] - t0[1];
         float alpha = (float) i / total_height;
         float beta = (float) (i - (second_half ? t1[1] - t0[1] : 0)) / segment_height;
-        std::array<int, 2> A, B;
+        std::array<int, 2> A{}, B{};
         for (int j = 0; j < 2; j++) {
             A[j] = int(t0[j] + (t2[j] - t0[j]) * alpha);
             B[j] = int(second_half ? t1[j] + (t2[j] - t1[j]) * beta : t0[j] + (t1[j] - t0[j]) * beta);

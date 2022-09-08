@@ -3,8 +3,8 @@
 #include "rasterize.hpp"
 
 #include <meshtools/logging.hpp>
+#include <meshtools/math.hpp>
 #include <meshtools/models/model.hpp>
-#include <meshtools/vec3.hpp>
 
 #include <embree3/rtcore.h>
 #include <embree3/rtcore_ray.h>
@@ -25,7 +25,7 @@ T sign(std::array<T, 2> p1, std::array<T, 2> p2, std::array<T, 2> p3) {
 }
 
 // http://www.altdevblogaday.com/2012/05/03/generating-uniformly-distributed-points-on-sphere/
-vec3 random_direction(std::mt19937& rnd) {
+glm::vec3 random_direction(std::mt19937& rnd) {
     float z = 2.0f * rnd() / std::mt19937::max() - 1.0f;
     float t = 2.0f * rnd() / std::mt19937::max() * M_PI;
     float r = sqrtf(1.0f - z * z);
@@ -53,9 +53,9 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
         auto* geometry = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
         assert(geometry);
         auto* vertices =
-                (float*) rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, sizeof(vec3), verts.size());
+                (float*) rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, sizeof(glm::vec3), verts.size());
         assert(vertices);
-        memcpy(vertices, verts.data(), sizeof(vec3) * verts.size());
+        memcpy(vertices, verts.data(), sizeof(glm::vec3) * verts.size());
 
         auto* triangles = (uint32_t*)
                 rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, 3 * sizeof(uint32_t), indices.size() / 3);
@@ -82,7 +82,7 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
 
     // Prep "random dirs"
     std::mt19937 rnd(0);
-    std::vector<vec3> randomDirs;
+    std::vector<glm::vec3> randomDirs;
     randomDirs.reserve(options.nsamples);
     for (size_t i = 0; i < options.nsamples; i++) {
         randomDirs.push_back(random_direction(rnd));
@@ -97,18 +97,18 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
         for (uint32_t j = 0; j < indexCount; j += 3) {
             //            logging::debug("Rasterizing {}/{}", j / 3, indexCount / 3);
             struct Vertex {
-                Vertex(vec3 pos, vec3 norm, vec2 tex)
+                Vertex(glm::vec3 pos, glm::vec3 norm, glm::vec2 tex)
                     : position(pos), normal(norm), uv(tex), uv3({tex[0], tex[1], 0.0f}),
                       uv2i({static_cast<int>(tex[0]), static_cast<int>(tex[1])}){
 
                       };
                 Vertex() = default;
 
-                vec3 position;
-                vec3 normal;
-                vec2 uv;
-                vec3 uv3;
-                std::array<int, 2> uv2i;
+                glm::vec3 position;
+                glm::vec3 normal;
+                glm::vec2 uv;
+                glm::vec3 uv3;
+                glm::vec<2, int, glm::defaultp> uv2i;
             };
             std::array<Vertex, 3> triangle{};
             for (size_t k = 0; k < 3; k++) {
@@ -137,18 +137,18 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
                 auto bc = barycentric(triangle[0].uv3,
                                       triangle[1].uv3,
                                       triangle[2].uv3,
-                                      vec3{static_cast<float>(x), static_cast<float>(y), 0});
-                vec3 normal{
+                                      glm::vec3{static_cast<float>(x), static_cast<float>(y), 0});
+                glm::vec3 normal{
                         triangle[0].normal[0] * bc[0] + triangle[1].normal[0] * bc[1] + triangle[2].normal[0] * bc[2],
                         triangle[0].normal[1] * bc[0] + triangle[1].normal[1] * bc[1] + triangle[2].normal[1] * bc[2],
                         triangle[0].normal[2] * bc[0] + triangle[1].normal[2] * bc[1] + triangle[2].normal[2] * bc[2],
                 };
-                normal = vec3Normalize(normal);
+                normal = glm::normalize(normal);
 
                 // Interpolate origin
-                vec3 org{triangle[0].position[0] * bc[0] + triangle[1].position[0] * bc[1] + triangle[2].position[0] * bc[2],
-                         triangle[0].position[1] * bc[0] + triangle[1].position[1] * bc[1] + triangle[2].position[1] * bc[2],
-                         triangle[0].position[2] * bc[0] + triangle[1].position[2] * bc[1] + triangle[2].position[2] * bc[2]};
+                glm::vec3 org{triangle[0].position[0] * bc[0] + triangle[1].position[0] * bc[1] + triangle[2].position[0] * bc[2],
+                              triangle[0].position[1] * bc[0] + triangle[1].position[1] * bc[1] + triangle[2].position[1] * bc[2],
+                              triangle[0].position[2] * bc[0] + triangle[1].position[2] * bc[1] + triangle[2].position[2] * bc[2]};
 
                 // Prepare rays to shoot through the differential hemisphere.
                 for (size_t i = 0; i < rays.size(); i++) {
@@ -160,8 +160,8 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
                     ray.tfar = options.far;
 
                     auto dir = randomDirs[i];
-                    if (vec3Dot(dir, normal) < 0.0)
-                        dir = vec3Scale(dir, -1.0);
+                    if (glm::dot(dir, normal) < 0.0)
+                        dir = scale(dir, -1.0f);
 
                     ray.dir_x = dir[0];
                     ray.dir_y = dir[1];

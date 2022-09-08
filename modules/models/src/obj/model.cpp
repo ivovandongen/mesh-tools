@@ -39,9 +39,9 @@ ModelLoadResult loadModel(const std::filesystem::path& file) {
     for (auto& shape : shapes) {
         meshes.emplace_back(shape.name,
                             std::move(shape.mesh.indices),
-                            copy<vec3>(shape.mesh.positions),
-                            copy<vec3>(shape.mesh.normals),
-                            copy<vec2>(shape.mesh.texcoords));
+                            copy<glm::vec3>(shape.mesh.positions),
+                            copy<glm::vec3>(shape.mesh.normals),
+                            copy<glm::vec2>(shape.mesh.texcoords));
     }
 
     result.value = std::make_shared<Model>(std::move(meshes));

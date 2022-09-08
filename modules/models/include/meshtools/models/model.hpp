@@ -1,9 +1,8 @@
 #pragma once
 
 #include <meshtools/image.hpp>
+#include <meshtools/math.hpp>
 #include <meshtools/result.hpp>
-#include <meshtools/vec2.hpp>
-#include <meshtools/vec3.hpp>
 
 #include <filesystem>
 #include <memory>
@@ -13,8 +12,8 @@ namespace meshtools::models {
 
 class Mesh {
 public:
-    Mesh(std::string name, std::vector<uint32_t> indices, std::vector<vec3> positions, std::vector<vec3> normals,
-         std::vector<vec2> texcoords)
+    Mesh(std::string name, std::vector<uint32_t> indices, std::vector<glm::vec3> positions, std::vector<glm::vec3> normals,
+         std::vector<glm::vec2> texcoords)
         : name_(std::move(name)), indices_(std::move(indices)), positions_(std::move(positions)), normals_(std::move(normals)),
           texcoords_(std::move(texcoords)) {}
 
@@ -26,28 +25,28 @@ public:
         indices_ = std::move(indices);
     };
 
-    const std::vector<vec3>& positions() const {
+    const std::vector<glm::vec3>& positions() const {
         return positions_;
     };
 
-    void positions(std::vector<vec3> positions) {
+    void positions(std::vector<glm::vec3> positions) {
         positions_ = std::move(positions);
     };
 
-    const std::vector<vec3>& normals() const {
+    const std::vector<glm::vec3>& normals() const {
         return normals_;
     }
 
-    void normals(std::vector<vec3> normals) {
+    void normals(std::vector<glm::vec3> normals) {
         normals_ = std::move(normals);
     };
 
-    const std::vector<vec2>& texcoords() const {
+    const std::vector<glm::vec2>& texcoords() const {
         return texcoords_;
     }
 
 
-    void texcoords(std::vector<vec2> uvs) {
+    void texcoords(std::vector<glm::vec2> uvs) {
         texcoords_ = std::move(uvs);
     }
 
@@ -58,9 +57,9 @@ public:
 private:
     std::string name_;
     std::vector<uint32_t> indices_;
-    std::vector<vec3> positions_;
-    std::vector<vec3> normals_;
-    std::vector<vec2> texcoords_;
+    std::vector<glm::vec3> positions_;
+    std::vector<glm::vec3> normals_;
+    std::vector<glm::vec2> texcoords_;
 };
 
 using ModelLoadResult = Result<class Model>;
