@@ -37,6 +37,7 @@ ModelLoadResult loadModel(const std::filesystem::path& file) {
     meshes.reserve(shapes.size());
     for (auto& shape : shapes) {
         meshes.emplace_back(shape.name,
+                            meshes.size(),
                             std::move(shape.mesh.indices),
                             copy<glm::vec3>(shape.mesh.positions),
                             copy<glm::vec3>(shape.mesh.normals),

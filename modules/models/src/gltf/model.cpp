@@ -1,5 +1,6 @@
 #include "model.hpp"
 
+#include <meshtools/algorithm.hpp>
 #include <meshtools/logging.hpp>
 #include <meshtools/string.hpp>
 
@@ -193,8 +194,47 @@ size_t addBufferView(tinygltf::Model& model, const tinygltf::Buffer& buffer, con
 namespace meshtools::models::gltf {
 
 void parseNodes(const tinygltf::Model& gltfModel, Model& model) {
-    // TODO
-    //    gltfModel.scenes[0].nodes;
+    auto convertNode = [&](const tinygltf::Model&, const tinygltf::Node& in, Node& out) {
+        if (in.mesh > -1) {
+            // Use the original mesh indices to assign all the mesh indices for this node
+            out.meshes(find_indices(model.meshes(), [&](const auto& mesh) { return mesh.originalMeshIndex() == in.mesh; }));
+        }
+
+        if (in.matrix.size() == 16) {
+            out.transform(glm::make_mat4x4(in.matrix.data()));
+        } else {
+
+            // Translation
+            auto translation = in.translation.size() == 3
+                                       ? glm::translate(glm::mat4(1), glm::vec3(in.translation[0], in.translation[1], in.translation[2]))
+                                       : glm::mat4(1);
+
+            // Rotation (glm v gltf -> wxyz / xyzw
+            auto rotation = in.rotation.size() == 4
+                                    ? glm::mat4_cast(glm::quat(in.rotation[3], in.rotation[0], in.rotation[1], in.rotation[2]))
+                                    : glm::mat4(1);
+
+            // Scale
+            auto scale = in.scale.size() == 3 ? glm::scale(glm::mat4(1), glm::vec3(in.scale[0], in.scale[1], in.scale[2])) : glm::mat4(1);
+
+            out.transform(translation * rotation * scale);
+        }
+    };
+
+    std::function<void(const tinygltf::Model&, const tinygltf::Node&, Node*)> processNode =
+            [&](const tinygltf::Model& gltfModel, const tinygltf::Node& gltfNode, Node* parent) {
+                auto& converted = parent == nullptr ? model.nodes().emplace_back() : parent->children().emplace_back();
+                convertNode(gltfModel, gltfNode, converted);
+
+                for (const auto& child : gltfNode.children) {
+                    processNode(gltfModel, gltfModel.nodes[child], &converted);
+                }
+            };
+
+    assert(!gltfModel.scenes.empty());
+    for (auto nodeIdx : gltfModel.scenes[0].nodes) {
+        processNode(gltfModel, gltfModel.nodes[nodeIdx], nullptr);
+    }
 }
 
 template<class T>
@@ -260,7 +300,13 @@ Mesh parsePrimitive(const tinygltf::Model& gltfModel, const tinygltf::Mesh& gltf
             return ib;
         }
     }();
-    return {gltfMesh.name, std::move(indices), std::move(positions), std::move(normals), std::move(uvs)};
+
+    return {gltfMesh.name,
+            static_cast<size_t>(std::find(gltfModel.meshes.begin(), gltfModel.meshes.end(), gltfMesh) - gltfModel.meshes.begin()),
+            std::move(indices),
+            std::move(positions),
+            std::move(normals),
+            std::move(uvs)};
 }
 
 std::vector<Mesh> parseMesh(const tinygltf::Model& gltfModel, const tinygltf::Mesh& gltfMesh) {
