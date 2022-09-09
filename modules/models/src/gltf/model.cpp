@@ -178,6 +178,16 @@ BufferRange appendToBuffer(tinygltf::Buffer& buffer, const std::vector<unsigned 
 
     return {startIdx, startIdx + data.size(), buffer.data.size()};
 }
+
+size_t addBufferView(tinygltf::Model& model, const tinygltf::Buffer& buffer, const BufferRange& bufferRange, int target = 0) {
+    auto& bufferView = model.bufferViews.emplace_back();
+    bufferView.buffer = std::find(model.buffers.begin(), model.buffers.end(), buffer) - model.buffers.begin();
+    bufferView.byteOffset = bufferRange.start;
+    bufferView.byteLength = bufferRange.length();
+    bufferView.target = target;
+    return model.bufferViews.size() - 1;
+}
+
 } // namespace
 
 namespace meshtools::models::gltf {
@@ -336,20 +346,14 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
 
     // Add the buffer to the model
     auto& buffer = gltfModel.buffers.emplace_back();
-    size_t bufferIndex = gltfModel.buffers.size() - 1;
 
-    // Add image/texture/sampler
-    size_t aoTextureIndex;
-    {
-        // Add the image
+    // Add AO image/texture/sampler
+    size_t aoTextureIndex = [&]() {
+        // Add the image to the buffer
         auto imageBufferRange = appendToBuffer(buffer, aoMap.png());
 
         // Add a BufferView for the image data
-        auto aoImageBufferViewIndex = gltfModel.bufferViews.size();
-        auto& aoImageBufferView = gltfModel.bufferViews.emplace_back();
-        aoImageBufferView.buffer = bufferIndex;
-        aoImageBufferView.byteOffset = imageBufferRange.start;
-        aoImageBufferView.byteLength = imageBufferRange.length();
+        auto aoImageBufferViewIndex = addBufferView(gltfModel, buffer, imageBufferRange);
 
         // Add an image
         auto aoImageIndex = gltfModel.images.size();
@@ -365,11 +369,11 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
         aoSampler.magFilter = TINYGLTF_TEXTURE_FILTER_LINEAR;
 
         // Add the texture
-        aoTextureIndex = gltfModel.textures.size();
         auto& aoTexture = gltfModel.textures.emplace_back();
         aoTexture.source = aoImageIndex;
         aoTexture.sampler = aoSamplerIndex;
-    }
+        return gltfModel.textures.size() - 1;
+    }();
 
 
     for (auto& mesh : model.meshes()) {
@@ -385,16 +389,12 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
                                                  }));
 
         // Add a BufferView for the indices
-        auto& indexBufferView = gltfModel.bufferViews.emplace_back();
-        indexBufferView.buffer = bufferIndex;
-        indexBufferView.byteOffset = indicesBufferRange.start;
-        indexBufferView.byteLength = indicesBufferRange.length();
-        indexBufferView.target = TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER;
+        auto indicesBufferViewIndex = addBufferView(gltfModel, buffer, indicesBufferRange, TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER);
 
         // Add an accessor for the indices
         auto indexAccessorIdx = gltfModel.accessors.size();
         auto& indexAccessor = gltfModel.accessors.emplace_back();
-        indexAccessor.bufferView = gltfModel.bufferViews.size() - 1;
+        indexAccessor.bufferView = indicesBufferViewIndex;
         indexAccessor.componentType = TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT;
         indexAccessor.count = mesh.indices().size();
         indexAccessor.type = TINYGLTF_TYPE_SCALAR;
@@ -419,16 +419,12 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
                                                       }));
 
             // Add a BufferView for the positions
-            auto& positionBufferView = gltfModel.bufferViews.emplace_back();
-            positionBufferView.buffer = bufferIndex;
-            positionBufferView.byteOffset = positionBufferRange.start;
-            positionBufferView.byteLength = positionBufferRange.length();
-            positionBufferView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
+            auto positionBufferViewIndex = addBufferView(gltfModel, buffer, positionBufferRange, TINYGLTF_TARGET_ARRAY_BUFFER);
 
             // Add an accessor for the positions
             primitive.attributes["POSITION"] = gltfModel.accessors.size();
             auto& positionAccessor = gltfModel.accessors.emplace_back();
-            positionAccessor.bufferView = gltfModel.bufferViews.size() - 1;
+            positionAccessor.bufferView = positionBufferViewIndex;
             positionAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
             positionAccessor.count = mesh.positions().size();
             positionAccessor.type = TINYGLTF_TYPE_VEC3;
@@ -444,16 +440,12 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
                                                 }));
 
             // Add a BufferView for the uvs
-            auto& uvBufferView = gltfModel.bufferViews.emplace_back();
-            uvBufferView.buffer = bufferIndex;
-            uvBufferView.byteOffset = uvBufferRange.start;
-            uvBufferView.byteLength = uvBufferRange.length();
-            uvBufferView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
+            auto uvBufferViewIndex = addBufferView(gltfModel, buffer, uvBufferRange);
 
             // Add an accessor for the uvs
             primitive.attributes["TEXCOORD_0"] = gltfModel.accessors.size();
             auto& uvAccessor = gltfModel.accessors.emplace_back();
-            uvAccessor.bufferView = gltfModel.bufferViews.size() - 1;
+            uvAccessor.bufferView = uvBufferViewIndex;
             uvAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
             uvAccessor.count = mesh.positions().size();
             uvAccessor.type = TINYGLTF_TYPE_VEC2;
