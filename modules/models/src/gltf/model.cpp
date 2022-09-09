@@ -14,8 +14,26 @@
 #include <tiny_gltf.h>
 
 #include <algorithm>
+#include <vector>
 
 namespace {
+
+std::string text(tinygltf::Model& model) {
+    std::stringstream os;
+    tinygltf::TinyGLTF tiny;
+    tiny.SetSerializeDefaultValues(false);
+    tiny.WriteGltfSceneToStream(&model, os, true, false);
+    return os.str();
+}
+
+std::vector<char> binary(tinygltf::Model& model) {
+    std::stringstream os;
+    tinygltf::TinyGLTF tiny;
+    tiny.SetSerializeDefaultValues(false);
+    tiny.WriteGltfSceneToStream(&model, os, false, true);
+    auto str = os.str();
+    return std::vector<char>{str.begin(), str.end()};
+}
 
 // Stub
 bool loadImageDataFunction(tinygltf::Image*, const int, std::string*, std::string*, int, int, const unsigned char*, int,
@@ -70,13 +88,15 @@ constexpr size_t componentCount(const tinygltf::Accessor& accessor) {
     }
 }
 
-} // namespace
-
-namespace meshtools::models::gltf {
-
-void parseNodes(const tinygltf::Model& gltfModel, Model& model) {
-    // TODO
-    //    gltfModel.scenes[0].nodes;
+template<size_t N, class T, class Fn>
+std::vector<unsigned char> pack(T input, Fn&& fn) {
+    std::vector<unsigned char> result;
+    result.reserve(N * input.size());
+    for (auto& i : input) {
+        unsigned char* converted = fn(i);
+        result.insert(result.end(), &converted[0], &converted[N]);
+    }
+    return result;
 }
 
 template<class T>
@@ -112,6 +132,59 @@ template<>
 uint32_t convert<uint32_t>(const unsigned char* data, size_t componentByteSize) {
     assert(componentByteSize < sizeof(uint32_t));
     return copy<uint32_t>(data, componentByteSize);
+}
+
+std::array<glm::vec3, 2> minmax(const std::vector<glm::vec3>& positions) {
+    constexpr const static auto max = std::numeric_limits<float>::max();
+    constexpr const static auto min = -std::numeric_limits<float>::max();
+    return std::accumulate(positions.begin(),
+                           positions.end(),
+                           std::array<glm::vec3, 2>{glm::vec3{max, max, max}, glm::vec3{min, min, min}},
+                           [](std::array<glm::vec3, 2>& acc, const glm::vec3& val) {
+                               acc[0][0] = std::min(acc[0][0], val[0]);
+                               acc[0][1] = std::min(acc[0][1], val[1]);
+                               acc[0][2] = std::min(acc[0][2], val[2]);
+
+                               acc[1].x = std::max(acc[1][0], val[0]);
+                               acc[1].y = std::max(acc[1][1], val[1]);
+                               acc[1].z = std::max(acc[1][2], val[2]);
+
+                               return acc;
+                           });
+}
+
+struct BufferRange {
+    size_t start;
+    size_t end;
+    size_t endPadded;
+
+    size_t length() const {
+        return end - start;
+    }
+
+    size_t lengthPadded() const {
+        return endPadded - start;
+    }
+};
+
+BufferRange appendToBuffer(tinygltf::Buffer& buffer, const std::vector<unsigned char>& data) {
+    auto startIdx = buffer.data.size();
+    buffer.data.insert(buffer.data.end(), data.begin(), data.end());
+
+    // Pad if needed
+    if (auto padding = buffer.data.size() % 4) {
+        buffer.data.resize(buffer.data.size() + padding, 0);
+    }
+
+    return {startIdx, startIdx + data.size(), buffer.data.size()};
+}
+} // namespace
+
+namespace meshtools::models::gltf {
+
+void parseNodes(const tinygltf::Model& gltfModel, Model& model) {
+    // TODO
+    //    gltfModel.scenes[0].nodes;
 }
 
 template<class T>
@@ -248,8 +321,156 @@ ModelLoadResult LoadModel(const std::filesystem::path& file) {
 }
 
 void dump(const Model& model, const Image& aoMap, const std::filesystem::path& file) {
-    logging::warn("Model dump for glTF not implemented");
-    assert(false);
+    if (model.meshes().empty()) {
+        logging::warn("No meshes to dump into {}", file.c_str());
+        return;
+    }
+
+    tinygltf::Model gltfModel;
+    // Define the asset. The version is required
+    gltfModel.asset.version = "2.0";
+    gltfModel.asset.generator = "tinygltf";
+
+    // Default scene
+    auto& scene = gltfModel.scenes.emplace_back();
+
+    // Add the buffer to the model
+    auto& buffer = gltfModel.buffers.emplace_back();
+    size_t bufferIndex = gltfModel.buffers.size() - 1;
+
+    // Add image/texture/sampler
+    size_t aoTextureIndex;
+    {
+        // Add the image
+        auto imageBufferRange = appendToBuffer(buffer, aoMap.png());
+
+        // Add a BufferView for the image data
+        auto aoImageBufferViewIndex = gltfModel.bufferViews.size();
+        auto& aoImageBufferView = gltfModel.bufferViews.emplace_back();
+        aoImageBufferView.buffer = bufferIndex;
+        aoImageBufferView.byteOffset = imageBufferRange.start;
+        aoImageBufferView.byteLength = imageBufferRange.length();
+
+        // Add an image
+        auto aoImageIndex = gltfModel.images.size();
+        auto& aoImage = gltfModel.images.emplace_back();
+        aoImage.bufferView = aoImageBufferViewIndex;
+        aoImage.mimeType = "image/png";
+
+        // Add the sampler
+        auto aoSamplerIndex = gltfModel.samplers.size();
+        auto& aoSampler = gltfModel.samplers.emplace_back();
+        aoSampler.name = "AO";
+        aoSampler.minFilter = TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR;
+        aoSampler.magFilter = TINYGLTF_TEXTURE_FILTER_LINEAR;
+
+        // Add the texture
+        aoTextureIndex = gltfModel.textures.size();
+        auto& aoTexture = gltfModel.textures.emplace_back();
+        aoTexture.source = aoImageIndex;
+        aoTexture.sampler = aoSamplerIndex;
+    }
+
+
+    for (auto& mesh : model.meshes()) {
+        // Add a node and mesh
+        gltfModel.meshes.emplace_back();
+        auto& node = gltfModel.nodes.emplace_back();
+        node.mesh = gltfModel.meshes.size() - 1;
+        scene.nodes.push_back(gltfModel.nodes.size() - 1);
+
+        // Add indices to buffer
+        auto indicesBufferRange = appendToBuffer(buffer, pack<sizeof(uint32_t)>(mesh.indices(), [](auto& index) {
+                                                     return static_cast<unsigned char*>(static_cast<void*>(&index));
+                                                 }));
+
+        // Add a BufferView for the indices
+        auto& indexBufferView = gltfModel.bufferViews.emplace_back();
+        indexBufferView.buffer = bufferIndex;
+        indexBufferView.byteOffset = indicesBufferRange.start;
+        indexBufferView.byteLength = indicesBufferRange.length();
+        indexBufferView.target = TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER;
+
+        // Add an accessor for the indices
+        auto indexAccessorIdx = gltfModel.accessors.size();
+        auto& indexAccessor = gltfModel.accessors.emplace_back();
+        indexAccessor.bufferView = gltfModel.bufferViews.size() - 1;
+        indexAccessor.componentType = TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT;
+        indexAccessor.count = mesh.indices().size();
+        indexAccessor.type = TINYGLTF_TYPE_SCALAR;
+        indexAccessor.maxValues.push_back(*std::max_element(mesh.indices().begin(), mesh.indices().end()));
+        indexAccessor.minValues.push_back(*std::min_element(mesh.indices().begin(), mesh.indices().end()));
+
+        // Add a primitive and a mesh
+        auto& primitive = gltfModel.meshes.back().primitives.emplace_back();
+        primitive.indices = indexAccessorIdx;
+        primitive.mode = TINYGLTF_MODE_TRIANGLES;
+
+        // Add a material
+        primitive.material = gltfModel.materials.size();
+        auto& material = gltfModel.materials.emplace_back();
+        material.name = mesh.name();
+        material.occlusionTexture.index = aoTextureIndex;
+
+        // Add the position data
+        {
+            auto positionBufferRange = appendToBuffer(buffer, pack<sizeof(glm::vec3)>(mesh.positions(), [](auto& pos) {
+                                                          return static_cast<unsigned char*>(static_cast<void*>(&pos));
+                                                      }));
+
+            // Add a BufferView for the positions
+            auto& positionBufferView = gltfModel.bufferViews.emplace_back();
+            positionBufferView.buffer = bufferIndex;
+            positionBufferView.byteOffset = positionBufferRange.start;
+            positionBufferView.byteLength = positionBufferRange.length();
+            positionBufferView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
+
+            // Add an accessor for the positions
+            primitive.attributes["POSITION"] = gltfModel.accessors.size();
+            auto& positionAccessor = gltfModel.accessors.emplace_back();
+            positionAccessor.bufferView = gltfModel.bufferViews.size() - 1;
+            positionAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
+            positionAccessor.count = mesh.positions().size();
+            positionAccessor.type = TINYGLTF_TYPE_VEC3;
+            auto minMax = minmax(mesh.positions());
+            positionAccessor.minValues = std::vector<double>{minMax[0][0], minMax[0][1], minMax[0][2]};
+            positionAccessor.maxValues = std::vector<double>{minMax[1][0], minMax[1][1], minMax[1][2]};
+        }
+
+        // Add the uv data and albedo and baseColor texture
+        if (!mesh.texcoords().empty()) {
+            auto uvBufferRange = appendToBuffer(buffer, pack<sizeof(glm::vec2)>(mesh.texcoords(), [](auto& uv) {
+                                                    return static_cast<unsigned char*>(static_cast<void*>(&uv));
+                                                }));
+
+            // Add a BufferView for the uvs
+            auto& uvBufferView = gltfModel.bufferViews.emplace_back();
+            uvBufferView.buffer = bufferIndex;
+            uvBufferView.byteOffset = uvBufferRange.start;
+            uvBufferView.byteLength = uvBufferRange.length();
+            uvBufferView.target = TINYGLTF_TARGET_ARRAY_BUFFER;
+
+            // Add an accessor for the uvs
+            primitive.attributes["TEXCOORD_0"] = gltfModel.accessors.size();
+            auto& uvAccessor = gltfModel.accessors.emplace_back();
+            uvAccessor.bufferView = gltfModel.bufferViews.size() - 1;
+            uvAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
+            uvAccessor.count = mesh.positions().size();
+            uvAccessor.type = TINYGLTF_TYPE_VEC2;
+        }
+    }
+
+    // Write out
+    if (string::endsWith(file.string(), ".gltf")) {
+        std::ofstream out(file);
+        out << text(gltfModel);
+        out.close();
+    } else {
+        auto bin = binary(gltfModel);
+        std::ofstream output(file, std::ios::binary);
+        std::copy(bin.begin(), bin.end(), std::ostreambuf_iterator<char>(output));
+        output.close();
+    }
 }
 
 } // namespace meshtools::models::gltf
