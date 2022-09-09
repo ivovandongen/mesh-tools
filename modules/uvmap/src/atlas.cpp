@@ -87,6 +87,20 @@ void Atlas::apply(models::Model& model) {
     for (size_t i = 0; i < model.meshes().size(); i++) {
         auto& atlasMesh = impl_->atlas_->meshes[i];
         auto& modelMesh = model.meshes()[i];
+
+#ifndef NDEBUG
+        assert(modelMesh.indices().size() == atlasMesh.indexCount);
+        std::vector<uint32_t> meshIndices = modelMesh.indices();
+        std::sort(meshIndices.begin(), meshIndices.end());
+
+        std::vector<uint32_t> atlasIndices{atlasMesh.indexArray, atlasMesh.indexArray + atlasMesh.indexCount};
+        std::sort(atlasIndices.begin(), atlasIndices.end());
+        assert(meshIndices.size() == atlasIndices.size());
+        for (size_t index = 0; index < meshIndices.size(); index++) {
+            assert(meshIndices[i] == atlasIndices[i]);
+        }
+#endif
+
         std::vector<glm::vec3> positions;
         std::vector<glm::vec3> normals;
         std::vector<glm::vec2> uvs;
