@@ -116,14 +116,15 @@ int main(int argc, char** argv) {
     // Blur texture
     if (options.blurKernelSize > 0) {
         logging::info("Blur pass. Kernel size {}", options.blurKernelSize);
-        blur(*bakeResult.value, options.blurKernelSize);
+        bakeResult.value->blur(options.blurKernelSize);
     }
 
     // Output
     if (!options.outputTexture.empty()) {
         logging::info("Writing texture to {}", options.outputTexture.c_str());
-        writePng(*bakeResult.value, options.outputTexture);
+        bakeResult.value->png(options.outputTexture);
     }
+
     logging::info("Writing result to {}", options.output.c_str());
     modelLoadResult.value->dump(*bakeResult.value, options.output);
 
