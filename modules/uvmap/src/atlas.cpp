@@ -97,7 +97,7 @@ void Atlas::apply(models::Model& model) {
             const auto& ivert = atlasMesh.vertexArray[vert];
             positions.push_back(modelMesh.positions()[ivert.xref]);
             normals.push_back(modelMesh.normals()[ivert.xref]);
-            uvs.emplace_back(ivert.uv[0] * uscale, 1 - ivert.uv[1] * vscale);
+            uvs.emplace_back(ivert.uv[0] * uscale, ivert.uv[1] * vscale);
         }
         modelMesh.indices({atlasMesh.indexArray, atlasMesh.indexArray + atlasMesh.indexCount});
         modelMesh.positions(std::move(positions));

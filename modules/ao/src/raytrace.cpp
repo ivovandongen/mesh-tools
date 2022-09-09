@@ -116,7 +116,7 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
                 assert(mesh.texcoords().size() > index);
                 auto uv = mesh.texcoords()[index];
                 uv[0] *= uscale;
-                uv[1] = (1 - uv[1]) * vscale;
+                uv[1] *= vscale;
                 assert(uv[0] <= image->width());
                 assert(uv[1] <= image->height());
                 triangle[k] = {mesh.positions()[index], mesh.normals()[index], uv};

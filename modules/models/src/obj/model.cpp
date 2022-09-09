@@ -80,7 +80,8 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
             // UV
             if (!modelMesh.texcoords().empty()) {
                 const auto& uv = modelMesh.texcoords()[nvert];
-                fprintf(outobj, "vt %f %f\n", uv[0], uv[1]);
+                // Flip y
+                fprintf(outobj, "vt %f %f\n", uv[0], 1 - uv[1]);
             }
         }
 
