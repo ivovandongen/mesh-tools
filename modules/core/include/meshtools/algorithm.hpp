@@ -5,7 +5,29 @@
 namespace meshtools {
 
 template<template<typename...> class Cont = std::vector, class T, class Fn>
-Cont<T> find(const Cont<T>& in, Fn&& fn) {
+Cont<std::reference_wrapper<T>> find(Cont<T>& in, Fn&& fn) {
+    Cont<std::reference_wrapper<T>> result;
+    for (auto it = in.begin(); it != in.end(); it++) {
+        if (fn(*it)) {
+            result.emplace_back(*it);
+        }
+    }
+    return result;
+}
+
+template<template<typename...> class Cont = std::vector, class T, class Fn>
+Cont<std::reference_wrapper<const T>> find(const Cont<T>& in, Fn&& fn) {
+    Cont<std::reference_wrapper<const T>> result;
+    for (auto it = in.begin(); it != in.end(); it++) {
+        if (fn(*it)) {
+            result.emplace_back(*it);
+        }
+    }
+    return result;
+}
+
+template<template<typename...> class Cont = std::vector, class T, class Fn>
+Cont<T> copy(const Cont<T>& in, Fn&& fn) {
     Cont<T> result;
     std::copy_if(in.begin(), in.end(), std::back_inserter(result), fn);
     return result;
