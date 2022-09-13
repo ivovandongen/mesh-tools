@@ -44,7 +44,7 @@ Result<Atlas> Atlas::Create(const models::Model& model, const AtlasCreateOptions
             meshDecl.vertexNormalStride = normalsView.stride();
         }
         if (mesh.hasVertexAttribute(models::AttributeType::TEXCOORD)) {
-            auto uvsView = mesh.vertexAttribute<glm::vec3>(models::AttributeType::NORMAL);
+            auto uvsView = mesh.vertexAttribute<glm::vec3>(models::AttributeType::TEXCOORD);
             std::vector<glm::vec3> uvs{uvsView.begin(), uvsView.end()};
             meshDecl.vertexUvData = uvs.data();
             meshDecl.vertexUvStride = uvsView.stride();
@@ -95,8 +95,6 @@ void Atlas::apply(models::Model& model) {
     for (size_t i = 0; i < model.meshes().size(); i++) {
         auto& atlasMesh = impl_->atlas_->meshes[i];
         auto& modelMesh = model.meshes()[i];
-        auto& positionVA = modelMesh.vertexAttribute(models::AttributeType::POSITION);
-        auto& normalVA = modelMesh.vertexAttribute(models::AttributeType::NORMAL);
 
         // Update all vertex attributes (except Texcoords)
         std::unordered_map<models::AttributeType, models::TypedData> vertexData;
