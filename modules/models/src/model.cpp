@@ -7,8 +7,22 @@
 #include "./obj/model.hpp"
 
 #include <filesystem>
+#include <utility>
 
 namespace meshtools::models {
+
+Model::Model(std::vector<Mesh> meshes) : meshes_(std::move(meshes)) {
+    nodes_.reserve(meshes_.size());
+    for (size_t i = 0; i < meshes_.size(); i++) {
+        nodes_.emplace_back(i);
+    }
+}
+
+Model::Model(std::vector<Mesh> meshes, std::vector<Node> nodes) : meshes_(std::move(meshes)), nodes_(std::move(nodes)) {}
+
+Model::Model() = default;
+
+Model::~Model() = default;
 
 ModelLoadResult Model::Load(const std::filesystem::path& path) {
     auto loadModel = [](const auto& path) -> ModelLoadResult {
@@ -35,6 +49,14 @@ void Model::dump(const Image& aoMap, const std::filesystem::path& file) const {
         obj::dump(*this, aoMap, file);
     } else if (string::endsWith(file.string(), ".gltf") || string::endsWith(file.string(), ".glb")) {
         gltf::dump(*this, aoMap, file);
+    }
+}
+
+void Model::write(const std::filesystem::path& file) const {
+    if (string::endsWith(file.string(), ".obj")) {
+        logging::warn("Write not implemented for obj");
+    } else if (string::endsWith(file.string(), ".gltf") || string::endsWith(file.string(), ".glb")) {
+        gltf::write(*this, file);
     }
 }
 

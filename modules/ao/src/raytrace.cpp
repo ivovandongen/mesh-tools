@@ -33,7 +33,9 @@ glm::vec3 random_direction(std::mt19937& rnd) {
 }
 
 Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, RaytraceOptions options) {
-    if (std::any_of(model.meshes().begin(), model.meshes().end(), [](const models::Mesh& mesh) { return mesh.texcoords().empty(); })) {
+    if (std::any_of(model.meshes().begin(), model.meshes().end(), [](const models::Mesh& mesh) {
+            return !mesh.hasVertexAttribute(models::AttributeType::TEXCOORD);
+        })) {
         return {"Cannot raytrace models without texture coordinates"};
     }
 
@@ -46,20 +48,23 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
     assert(scene);
 
     for (const auto& mesh : model.meshes()) {
-        const auto& verts = mesh.positions();
-        const vector<uint32_t>& indices = mesh.indices();
+        auto& positions = mesh.vertexAttribute(models::AttributeType::POSITION);
         // Populate the embree mesh.
         // TODO: Backface culling
         auto* geometry = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
         assert(geometry);
+        assert(positions.dataType() == models::DataType::FLOAT);
+        assert(positions.componentCount() == 3);
         auto* vertices =
-                (float*) rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, sizeof(glm::vec3), verts.size());
+                rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, positions.stride(), positions.count());
         assert(vertices);
-        memcpy(vertices, verts.data(), sizeof(glm::vec3) * verts.size());
+        memcpy(vertices, positions.buffer().data(), positions.buffer().size());
 
-        auto* triangles = (uint32_t*)
-                rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, 3 * sizeof(uint32_t), indices.size() / 3);
-        memcpy(triangles, indices.data(), sizeof(uint32_t) * indices.size());
+        auto indices = mesh.indices<uint32_t>();
+        auto* triangles =
+                rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, 3 * sizeof (uint32_t), indices.size() / 3);
+        assert(triangles);
+        memcpy(triangles, indices.raw(), sizeof(uint32_t) * indices.size());
 
         rtcCommitGeometry(geometry);
         rtcAttachGeometry(scene, geometry);
@@ -89,10 +94,16 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
     }
 
     for (const auto& mesh : model.meshes()) {
-        assert(!mesh.texcoords().empty());
-        assert(mesh.positions().size() == mesh.texcoords().size());
-        auto indexCount = mesh.indices().size();
+        assert(mesh.hasVertexAttribute(models::AttributeType::TEXCOORD));
+        assert(mesh.vertexAttribute(models::AttributeType::POSITION).count() ==
+               mesh.vertexAttribute(models::AttributeType::TEXCOORD).count());
+        auto indexCount = mesh.indices().count();
         logging::debug("Ray trace - tracing {} triangles", indexCount / 3);
+
+        auto indexView = mesh.indices<uint32_t>();
+        auto positionsView = mesh.vertexAttribute<glm::vec3>(models::AttributeType::POSITION);
+        auto normalsView = mesh.vertexAttribute<glm::vec3>(models::AttributeType::NORMAL);
+        auto texcoordsView = mesh.vertexAttribute<glm::vec2>(models::AttributeType::TEXCOORD);
 
         for (uint32_t j = 0; j < indexCount; j += 3) {
             //            logging::debug("Rasterizing {}/{}", j / 3, indexCount / 3);
@@ -112,14 +123,14 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
             };
             std::array<Vertex, 3> triangle{};
             for (size_t k = 0; k < 3; k++) {
-                auto index = mesh.indices()[j + k];
-                assert(mesh.texcoords().size() > index);
-                auto uv = mesh.texcoords()[index];
+                auto index = indexView[j + k];
+                assert(texcoordsView.size() > index);
+                auto uv = texcoordsView[index];
                 uv[0] *= uscale;
                 uv[1] *= vscale;
                 assert(uv[0] <= image->width());
                 assert(uv[1] <= image->height());
-                triangle[k] = {mesh.positions()[index], mesh.normals()[index], uv};
+                triangle[k] = {positionsView[index], normalsView[index], uv};
             }
 
             if (!triangle[0].uv3[0] && !triangle[0].uv3[1] && !triangle[1].uv3[0] && !triangle[1].uv3[1] && !triangle[2].uv3[0] &&

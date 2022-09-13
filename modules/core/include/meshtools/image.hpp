@@ -31,6 +31,14 @@ struct Image {
         return data_;
     }
 
+    std::string& name() {
+        return name_;
+    }
+
+    const std::string& name() const {
+        return name_;
+    }
+
     void blur(uint8_t blurKernelSize = 5);
 
     void png(const std::filesystem::path& file) const;
@@ -38,6 +46,7 @@ struct Image {
     std::vector<unsigned char> png() const;
 
 private:
+    std::string name_;
     uint32_t width_;
     uint32_t height_;
     uint8_t channels_;

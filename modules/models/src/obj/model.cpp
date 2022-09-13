@@ -12,7 +12,7 @@ std::vector<B> copy(const std::vector<A>& a) {
     if (a.empty()) {
         return {};
     }
-    std::vector<B> b{a.size() * sizeof(A) / sizeof(B)};
+    std::vector<B> b(a.size() * sizeof(A) / sizeof(B));
 
     memcpy(b.data(), a.data(), a.size() * sizeof(A));
 
@@ -36,12 +36,16 @@ ModelLoadResult loadModel(const std::filesystem::path& file) {
     std::vector<Mesh> meshes;
     meshes.reserve(shapes.size());
     for (auto& shape : shapes) {
+        std::unordered_map<AttributeType, TypedData> vertexData;
+        vertexData[AttributeType::POSITION] = TypedData{DataType::FLOAT, 3, copy<unsigned char>(shape.mesh.positions)};
+        vertexData[AttributeType::NORMAL] = TypedData{DataType::FLOAT, 3, copy<unsigned char>(shape.mesh.normals)};
+        vertexData[AttributeType::TEXCOORD] = TypedData{DataType::FLOAT, 2, copy<unsigned char>(shape.mesh.texcoords)};
+
         meshes.emplace_back(shape.name,
                             meshes.size(),
-                            std::move(shape.mesh.indices),
-                            copy<glm::vec3>(shape.mesh.positions),
-                            copy<glm::vec3>(shape.mesh.normals),
-                            copy<glm::vec2>(shape.mesh.texcoords));
+                            -1, // TODO: Material
+                            TypedData{DataType::U_INT, 1, copy<unsigned char>(shape.mesh.indices)},
+                            std::move(vertexData));
     }
 
     result.value = std::make_shared<Model>(std::move(meshes));
@@ -66,21 +70,28 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
         }
 
         // Vertex data
-        for (size_t nvert = 0; nvert < modelMesh.positions().size(); nvert++) {
-            const auto& position = modelMesh.positions()[nvert];
+        auto positions = modelMesh.vertexAttribute<glm::vec3>(AttributeType::POSITION);
+        auto normals = modelMesh.hasVertexAttribute(AttributeType::NORMAL)
+                               ? modelMesh.vertexAttribute<glm::vec3>(AttributeType::NORMAL).vector()
+                               : std::vector<glm::vec3>{};
+        auto texcoords = modelMesh.hasVertexAttribute(AttributeType::TEXCOORD)
+                                 ? modelMesh.vertexAttribute<glm::vec2>(AttributeType::TEXCOORD).vector()
+                                 : std::vector<glm::vec2>{};
+        for (size_t nvert = 0; nvert < positions.size(); nvert++) {
+            const auto& position = positions[nvert];
 
             // Position
             fprintf(outobj, "v %f %f %f\n", position[0], position[1], position[2]);
 
             // Normal
-            if (!modelMesh.normals().empty()) {
-                const auto& normal = modelMesh.normals()[nvert];
+            if (!normals.empty()) {
+                const auto& normal = normals[nvert];
                 fprintf(outobj, "vn %f %f %f\n", normal[0], normal[1], normal[2]);
             }
 
             // UV
-            if (!modelMesh.texcoords().empty()) {
-                const auto& uv = modelMesh.texcoords()[nvert];
+            if (!texcoords.empty()) {
+                const auto& uv = texcoords[nvert];
                 // Flip y
                 fprintf(outobj, "vt %f %f\n", uv[0], 1 - uv[1]);
             }
@@ -88,17 +99,18 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
 
         // Faces
         fprintf(outobj, "s %d\n", 0);
-        for (int nface = 0; nface < modelMesh.indices().size() / 3; nface++) {
-            int a = vertexCountBase + modelMesh.indices()[nface * 3] + 1;
-            int b = vertexCountBase + modelMesh.indices()[nface * 3 + 1] + 1;
-            int c = vertexCountBase + modelMesh.indices()[nface * 3 + 2] + 1;
-            if (modelMesh.normals().empty()) {
+        auto indices = modelMesh.indices<uint32_t>().vector();
+        for (int nface = 0; nface < indices.size() / 3; nface++) {
+            int a = vertexCountBase + indices[nface * 3] + 1;
+            int b = vertexCountBase + indices[nface * 3 + 1] + 1;
+            int c = vertexCountBase + indices[nface * 3 + 2] + 1;
+            if (normals.empty()) {
                 fprintf(outobj, "f %d/%d %d/%d %d/%d\n", a, a, b, b, c, c);
             } else {
                 fprintf(outobj, "f %d/%d/%d %d/%d/%d %d/%d/%d\n", a, a, a, b, b, b, c, c, c);
             }
         }
-        vertexCountBase += modelMesh.positions().size();
+        vertexCountBase += positions.size();
     }
 }
 

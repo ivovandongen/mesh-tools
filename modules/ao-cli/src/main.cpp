@@ -7,12 +7,14 @@
 #include <cxxopts.hpp>
 
 #include <filesystem>
+#include <set>
 
 using namespace meshtools;
 
 struct Options {
     std::filesystem::path input;
     std::filesystem::path output;
+    std::filesystem::path outputDump;
     std::filesystem::path outputTexture;
     uint32_t resolution;
     uint8_t blurKernelSize;
@@ -20,14 +22,15 @@ struct Options {
 };
 
 Options parseOpts(int argc, char** argv) {
-    cxxopts::Options options(argv[0], "Tiler");
+    cxxopts::Options options(argv[0], "ao-cli");
 
     // clang-format off
     options.add_options()
             ("i,input", "Input model file", cxxopts::value<std::string>())
-            ("o,output", "Output model file", cxxopts::value<std::string>())
+            ("o,output-file", "Output model file", cxxopts::value<std::string>()->default_value(""))
+            ("d,output-dump", "Output dump model file (only the basics, no merge)", cxxopts::value<std::string>()->default_value(""))
+            ("t, output-texture", "Output texture file separately", cxxopts::value<std::string>()->default_value(""))
             ("r,resolution", "Output texture resolution", cxxopts::value<uint32_t>()->default_value("0"))
-            ("output-texture", "Output texture file separately", cxxopts::value<std::string>()->default_value(""))
             ("b,blur", "Blur kernel size", cxxopts::value<uint8_t>()->default_value("5"))
             ("v,verbose", "Speak up!", cxxopts::value<bool>()->default_value("false"))
             ("h,help","Print usage");
@@ -42,7 +45,8 @@ Options parseOpts(int argc, char** argv) {
 
         Options opts{
                 result["input"].as<std::string>(),
-                result["output"].as<std::string>(),
+                result["output-file"].as<std::string>(),
+                result["output-dump"].as<std::string>(),
                 result["output-texture"].as<std::string>(),
                 result["resolution"].as<uint32_t>(),
                 result["blur"].as<uint8_t>(),
@@ -64,6 +68,10 @@ int main(int argc, char** argv) {
     auto options = parseOpts(argc, argv);
     if (options.verbose) {
         logging::setLevel(logging::Level::DEBUG);
+    }
+
+    if (options.outputTexture.empty() && options.output.empty() && options.outputDump.empty()) {
+        logging::warn("No output specified");
     }
 
     // Load input model
@@ -100,7 +108,7 @@ int main(int argc, char** argv) {
             resolution = {atlasResult.value->width(), atlasResult.value->height()};
         }
 
-        // Apply atlas to model
+        // Apply atlas to model and working meshes
         logging::info("Applying UV Atlas");
         atlasResult.value->apply(*modelLoadResult.value);
     }
@@ -119,14 +127,63 @@ int main(int argc, char** argv) {
         bakeResult.value->blur(options.blurKernelSize);
     }
 
-    // Output
+    // Debug output
+
+    if (!options.outputDump.empty()) {
+        logging::info("Writing dump to {}", options.outputDump.c_str());
+        modelLoadResult.value->dump(*bakeResult.value, options.outputDump);
+    }
+
     if (!options.outputTexture.empty()) {
         logging::info("Writing texture to {}", options.outputTexture.c_str());
         bakeResult.value->png(options.outputTexture);
     }
 
-    logging::info("Writing result to {}", options.output.c_str());
-    modelLoadResult.value->dump(*bakeResult.value, options.output);
+    { // Update the model with the AO Map
+
+        // Remove any occlusion textures from the original
+        std::set<int> occlusionTextures{};
+        for (auto& material : modelLoadResult.value->materials()) {
+            if (material.occlusionTexture >= 0) {
+                occlusionTextures.insert(material.occlusionTexture);
+                material.occlusionTexture = -1;
+            }
+        }
+
+        // Clean up stale textures, samplers and images
+        for (auto oaTexture : occlusionTextures) {
+            erase(modelLoadResult.value->textures(), oaTexture);
+        }
+        erase_if(modelLoadResult.value->samplers(), [&](const models::Sampler& sampler) {
+            auto samplerIdx = &sampler - &*modelLoadResult.value->samplers().begin();
+            return !exists(modelLoadResult.value->textures(), [&](const models::Texture& texture) { return texture.sampler == samplerIdx; });
+        });
+        erase_if(modelLoadResult.value->images(), [&](const auto& image) {
+            auto imageIdx = &image - &*modelLoadResult.value->images().begin();
+            return !exists(modelLoadResult.value->textures(), [&](const models::Texture& texture) { return texture.source == imageIdx; });
+        });
+
+
+        // Set the new occlusion texture
+        // TODO: make sure the mesh is actually mapped
+        auto aoTextureIndex = modelLoadResult.value->textures().size();
+        auto aoImageIndex = modelLoadResult.value->images().size();
+        auto aoSamplerIndex = modelLoadResult.value->samplers().size();
+        // TODO: Get rid of magic numbers
+        modelLoadResult.value->samplers().push_back(models::Sampler{.minFilter = 9987, .magFilter = 9729});
+        modelLoadResult.value->images().push_back(bakeResult.value);
+        modelLoadResult.value->textures().push_back(
+                models::Texture{.sampler = static_cast<int>(aoSamplerIndex), .source = static_cast<int>(aoImageIndex)});
+        for (auto& material : modelLoadResult.value->materials()) {
+            material.occlusionTexture = aoTextureIndex;
+        }
+    }
+
+    // Output
+    if (!options.output.empty()) {
+        logging::info("Writing result to {}", options.output.c_str());
+        modelLoadResult.value->write(options.output);
+    }
 
     return EXIT_SUCCESS;
 }
