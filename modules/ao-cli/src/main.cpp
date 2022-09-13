@@ -151,9 +151,10 @@ int main(int argc, char** argv) {
         }
 
         // Clean up stale textures, samplers and images
-        for (auto oaTexture : occlusionTextures) {
-            erase(modelLoadResult.value->textures(), oaTexture);
-        }
+        erase_if(modelLoadResult.value->textures(), [&](const models::Texture& texture) {
+            auto textureIdx = &texture - &*modelLoadResult.value->textures().begin();
+            return exists(occlusionTextures, [&](const int& textureIn) { return textureIn == textureIdx; });
+        });
         erase_if(modelLoadResult.value->samplers(), [&](const models::Sampler& sampler) {
             auto samplerIdx = &sampler - &*modelLoadResult.value->samplers().begin();
             return !exists(modelLoadResult.value->textures(), [&](const models::Texture& texture) { return texture.sampler == samplerIdx; });
