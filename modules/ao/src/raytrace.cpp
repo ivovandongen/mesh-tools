@@ -39,6 +39,12 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
         return {"Cannot raytrace models without texture coordinates"};
     }
 
+    if (std::any_of(model.meshes().begin(), model.meshes().end(), [](const models::Mesh& mesh) {
+            return !mesh.hasVertexAttribute(models::AttributeType::NORMAL);
+        })) {
+        return {"Cannot raytrace models without normals"};
+    }
+
     logging::debug("Ray trace - setting up scene");
 
     // Create the embree device and scene.
