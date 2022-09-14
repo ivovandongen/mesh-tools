@@ -68,7 +68,7 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
 
         auto indices = mesh.indices<uint32_t>();
         auto* triangles =
-                rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, 3 * sizeof (uint32_t), indices.size() / 3);
+                rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, 3 * sizeof(uint32_t), indices.size() / 3);
         assert(triangles);
         memcpy(triangles, indices.raw(), sizeof(uint32_t) * indices.size());
 

@@ -137,7 +137,7 @@ void Atlas::apply(models::Model& model) {
 
 #ifndef NDEBUG
         assert(modelMesh.indices().count() == atlasMesh.indexCount);
-        for (auto& va: modelMesh.vertexData()) {
+        for (auto& va : modelMesh.vertexData()) {
             assert(va.second.count() == atlasMesh.vertexCount);
         }
 #endif
