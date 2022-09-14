@@ -53,6 +53,8 @@ void Image::blur(uint8_t blurKernelSize) {
 
             double sum = 0.0;
             const double sigma = 4.0;
+            size_t minIdx = 0;
+            size_t maxIdx = data_.size() - 1;
 
             double color = 0;
 
@@ -61,9 +63,9 @@ void Image::blur(uint8_t blurKernelSize) {
                     auto hypotSq = (sx * sx + sy * sy);
                     auto div = 2.0 * sigma * sigma;
                     auto weight = std::exp(-hypotSq / div) / (div * M_PI);
-                    auto idx = (y + sy) * width() + (x + sx);
+                    auto idx = std::clamp<size_t>((y + sy) * width() + (x + sx), minIdx, maxIdx);
 
-                    auto val = data()[idx * channels() + 0];
+                    auto val = data_[idx * channels() + 0];
                     if (val == 0)
                         continue;
                     color += val * weight;
