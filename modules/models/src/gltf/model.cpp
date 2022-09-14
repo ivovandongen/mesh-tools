@@ -123,7 +123,7 @@ std::string attributeType(const meshtools::models::AttributeType& input) {
         case meshtools::models::AttributeType::TEXCOORD:
             return "TEXCOORD_0";
         case meshtools::models::AttributeType::COLOR:
-            return "COLOR_)";
+            return "COLOR_0";
         case meshtools::models::AttributeType::UNKNOWN:
             return "UNKNOWN";
     }
@@ -591,65 +591,70 @@ void write(const Model& model, const std::filesystem::path& outFile) {
         gltfModel.nodes.push_back(gltfNode);
     }
 
-    // Images
-    auto& imageBuffer = gltfModel.buffers.emplace_back();
-    for (auto& image : model.images()) {
-        tinygltf::Image gltfImage{};
-        gltfImage.width = image->width();
-        gltfImage.height = image->height();
-        gltfImage.component = image->channels();
-        gltfImage.mimeType = "image/png";
+    if (!model.images().empty()) {
 
-        auto imageBufferRange = appendToBuffer(imageBuffer, image->png());
-        auto bufferViewIndex = addBufferView(gltfModel, imageBuffer, imageBufferRange);
-        gltfImage.bufferView = bufferViewIndex;
-        gltfModel.images.emplace_back(gltfImage);
-    }
+        // Images
+        auto& imageBuffer = gltfModel.buffers.emplace_back();
+        for (auto& image : model.images()) {
+            tinygltf::Image gltfImage{};
+            gltfImage.width = image->width();
+            gltfImage.height = image->height();
+            gltfImage.component = image->channels();
+            gltfImage.mimeType = "image/png";
 
-    // Samplers
-    for (auto& sampler : model.samplers()) {
-        tinygltf::Sampler gltfSampler{};
-        if (sampler.minFilter > 0) {
-            gltfSampler.minFilter = sampler.minFilter;
+            auto imageBufferRange = appendToBuffer(imageBuffer, image->png());
+            auto bufferViewIndex = addBufferView(gltfModel, imageBuffer, imageBufferRange);
+            gltfImage.bufferView = bufferViewIndex;
+            gltfModel.images.emplace_back(gltfImage);
         }
-        if (sampler.magFilter > 0) {
-            gltfSampler.magFilter = sampler.magFilter;
-        }
-        if (sampler.wrapS > 0) {
-            gltfSampler.wrapS = sampler.wrapS;
-        }
-        if (sampler.wrapT > 0) {
-            gltfSampler.wrapT = sampler.wrapT;
-        }
-        gltfModel.samplers.emplace_back(gltfSampler);
-    }
 
-    // Textures
-    for (auto& texture : model.textures()) {
-        tinygltf::Texture gltfSampler{};
-        gltfSampler.source = texture.source;
-        gltfSampler.sampler = texture.sampler;
-        gltfModel.textures.emplace_back(gltfSampler);
+        // Samplers
+        for (auto& sampler : model.samplers()) {
+            tinygltf::Sampler gltfSampler{};
+            if (sampler.minFilter > 0) {
+                gltfSampler.minFilter = sampler.minFilter;
+            }
+            if (sampler.magFilter > 0) {
+                gltfSampler.magFilter = sampler.magFilter;
+            }
+            if (sampler.wrapS > 0) {
+                gltfSampler.wrapS = sampler.wrapS;
+            }
+            if (sampler.wrapT > 0) {
+                gltfSampler.wrapT = sampler.wrapT;
+            }
+            gltfModel.samplers.emplace_back(gltfSampler);
+        }
+
+        // Textures
+        for (auto& texture : model.textures()) {
+            tinygltf::Texture gltfSampler{};
+            gltfSampler.source = texture.source;
+            gltfSampler.sampler = texture.sampler;
+            gltfModel.textures.emplace_back(gltfSampler);
+        }
     }
 
     // Materials
-    gltfModel.materials.reserve(model.materials().size());
-    for (auto& material : model.materials()) {
-        tinygltf::Material mat{};
-        mat.pbrMetallicRoughness.baseColorFactor = {
-                material.pbrMetallicRoughness.baseColorFactor[0],
-                material.pbrMetallicRoughness.baseColorFactor[1],
-                material.pbrMetallicRoughness.baseColorFactor[2],
-                material.pbrMetallicRoughness.baseColorFactor[3],
-        };
-        mat.pbrMetallicRoughness.baseColorTexture.index = material.pbrMetallicRoughness.baseColorTexture;
-        mat.pbrMetallicRoughness.metallicFactor = material.pbrMetallicRoughness.metallicFactor;
-        mat.pbrMetallicRoughness.roughnessFactor = material.pbrMetallicRoughness.roughnessFactor;
-        mat.occlusionTexture.index = material.occlusionTexture;
-        mat.alphaMode = material.alphaMode;
-        mat.alphaCutoff = material.alphaCutoff;
-        mat.doubleSided = material.doubleSided;
-        gltfModel.materials.push_back(std::move(mat));
+    if (!model.materials().empty()) {
+        gltfModel.materials.reserve(model.materials().size());
+        for (auto& material : model.materials()) {
+            tinygltf::Material mat{};
+            mat.pbrMetallicRoughness.baseColorFactor = {
+                    material.pbrMetallicRoughness.baseColorFactor[0],
+                    material.pbrMetallicRoughness.baseColorFactor[1],
+                    material.pbrMetallicRoughness.baseColorFactor[2],
+                    material.pbrMetallicRoughness.baseColorFactor[3],
+            };
+            mat.pbrMetallicRoughness.baseColorTexture.index = material.pbrMetallicRoughness.baseColorTexture;
+            mat.pbrMetallicRoughness.metallicFactor = material.pbrMetallicRoughness.metallicFactor;
+            mat.pbrMetallicRoughness.roughnessFactor = material.pbrMetallicRoughness.roughnessFactor;
+            mat.occlusionTexture.index = material.occlusionTexture;
+            mat.alphaMode = material.alphaMode;
+            mat.alphaCutoff = material.alphaCutoff;
+            mat.doubleSided = material.doubleSided;
+            gltfModel.materials.push_back(std::move(mat));
+        }
     }
 
 
