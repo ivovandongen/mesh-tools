@@ -42,6 +42,10 @@ public:
         return vertexData_.find(attributeType)->second;
     }
 
+    TypedData& vertexAttribute(AttributeType attributeType) {
+        return vertexData_[attributeType];
+    }
+
     template<class T>
     DataView<T> vertexAttribute(AttributeType attributeType) const {
         assert(vertexData_.find(attributeType) != vertexData_.end());
@@ -66,6 +70,10 @@ public:
 
     std::vector<AttributeType> vertexAttributes() const {
         return meshtools::transform<AttributeType>(vertexData_, [](const auto& va) { return va.first; });
+    }
+
+    void removeAttribute(AttributeType attribute) {
+        vertexData_.erase(attribute);
     }
 
     const std::unordered_map<AttributeType, TypedData>& vertexData() const {

@@ -64,6 +64,31 @@ Options parseOpts(int argc, char** argv) {
     }
 }
 
+void removeAmbientOcclusionTextures(models::Model& model) {
+    // Remove any occlusion textures from the original
+    std::set<int> occlusionTextures{};
+    for (auto& material : model.materials()) {
+        if (material.occlusionTexture >= 0) {
+            occlusionTextures.insert(material.occlusionTexture);
+            material.occlusionTexture = -1;
+        }
+    }
+
+    // Clean up stale textures, samplers and images
+    erase_if(model.textures(), [&](const models::Texture& texture) {
+        auto textureIdx = &texture - &*model.textures().begin();
+        return exists(occlusionTextures, [&](const int& textureIn) { return textureIn == textureIdx; });
+    });
+    erase_if(model.samplers(), [&](const models::Sampler& sampler) {
+        auto samplerIdx = &sampler - &*model.samplers().begin();
+        return !exists(model.textures(), [&](const models::Texture& texture) { return texture.sampler == samplerIdx; });
+    });
+    erase_if(model.images(), [&](const auto& image) {
+        auto imageIdx = &image - &*model.images().begin();
+        return !exists(model.textures(), [&](const models::Texture& texture) { return texture.source == imageIdx; });
+    });
+}
+
 int main(int argc, char** argv) {
     auto options = parseOpts(argc, argv);
     if (options.verbose) {
@@ -117,7 +142,7 @@ int main(int argc, char** argv) {
     logging::info("Baking AO. Resolution {}x{}", resolution.width, resolution.height);
     auto bakeResult = ao::bake(*modelLoadResult.value, resolution, {});
     if (!bakeResult) {
-        logging::error("Could bake AO for model {}: {}", options.input.c_str(), bakeResult.error.c_str());
+        logging::error("Could not bake AO for model {}: {}", options.input.c_str(), bakeResult.error.c_str());
         return EXIT_FAILURE;
     }
 
@@ -142,28 +167,7 @@ int main(int argc, char** argv) {
     { // Update the model with the AO Map
 
         // Remove any occlusion textures from the original
-        std::set<int> occlusionTextures{};
-        for (auto& material : modelLoadResult.value->materials()) {
-            if (material.occlusionTexture >= 0) {
-                occlusionTextures.insert(material.occlusionTexture);
-                material.occlusionTexture = -1;
-            }
-        }
-
-        // Clean up stale textures, samplers and images
-        erase_if(modelLoadResult.value->textures(), [&](const models::Texture& texture) {
-            auto textureIdx = &texture - &*modelLoadResult.value->textures().begin();
-            return exists(occlusionTextures, [&](const int& textureIn) { return textureIn == textureIdx; });
-        });
-        erase_if(modelLoadResult.value->samplers(), [&](const models::Sampler& sampler) {
-            auto samplerIdx = &sampler - &*modelLoadResult.value->samplers().begin();
-            return !exists(modelLoadResult.value->textures(), [&](const models::Texture& texture) { return texture.sampler == samplerIdx; });
-        });
-        erase_if(modelLoadResult.value->images(), [&](const auto& image) {
-            auto imageIdx = &image - &*modelLoadResult.value->images().begin();
-            return !exists(modelLoadResult.value->textures(), [&](const models::Texture& texture) { return texture.source == imageIdx; });
-        });
-
+        removeAmbientOcclusionTextures(*modelLoadResult.value);
 
         // Set the new occlusion texture
         // TODO: make sure the mesh is actually mapped

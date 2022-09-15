@@ -8,10 +8,7 @@
 namespace meshtools::ao {
 
 struct BakeOptions {
-    int sizehint = 32;
     int nsamples = 128;
-    bool gbuffer = false;
-    bool chartinfo = false;
     float multiply = 1.0;
     float maxFar = 5.0;
     uint8_t channels = 1;
