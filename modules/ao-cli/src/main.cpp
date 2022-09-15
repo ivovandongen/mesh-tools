@@ -169,6 +169,14 @@ int main(int argc, char** argv) {
         // Remove any occlusion textures from the original
         removeAmbientOcclusionTextures(*modelLoadResult.value);
 
+        // Ensure all meshes have a material
+        for (auto& mesh : modelLoadResult.value->meshes()) {
+            if (mesh.materialIdx() < 0) {
+                mesh.materialIdx(modelLoadResult.value->materials().size());
+                modelLoadResult.value->materials().emplace_back();
+            }
+        }
+
         // Set the new occlusion texture
         // TODO: make sure the mesh is actually mapped
         auto aoTextureIndex = modelLoadResult.value->textures().size();

@@ -68,6 +68,10 @@ public:
         return materialIdx_;
     }
 
+    void materialIdx(int materialIdx) {
+        materialIdx_ = materialIdx;
+    }
+
     std::vector<AttributeType> vertexAttributes() const {
         return meshtools::transform<AttributeType>(vertexData_, [](const auto& va) { return va.first; });
     }

@@ -7,11 +7,11 @@
 namespace meshtools::models {
 
 struct PBRMetallicRoughness {
-    glm::vec4 baseColorFactor;
+    glm::vec4 baseColorFactor{1, 1, 1, 1};
     // TODO: Ignoring multiple uv channels
     int baseColorTexture = -1;
-    float metallicFactor = -1;
-    float roughnessFactor = -1;
+    float metallicFactor = 1;
+    float roughnessFactor = 1;
 
     // TODO: other items from: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#reference-material-pbrmetallicroughness
 };
