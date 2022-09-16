@@ -33,25 +33,22 @@ Result<Atlas> Atlas::Create(const models::Model& model, const AtlasCreateOptions
     for (const auto& mesh : model.meshes()) {
         xatlas::MeshDecl meshDecl;
         auto positionsView = mesh.vertexAttribute<glm::vec3>(models::AttributeType::POSITION);
-        std::vector<glm::vec3> positions{positionsView.begin(), positionsView.end()};
         meshDecl.vertexCount = (uint32_t) positionsView.size();
-        meshDecl.vertexPositionData = positions.data();
+        meshDecl.vertexPositionData = &*positionsView.begin();
         meshDecl.vertexPositionStride = positionsView.stride();
         if (mesh.hasVertexAttribute(models::AttributeType::NORMAL)) {
             auto normalsView = mesh.vertexAttribute<glm::vec3>(models::AttributeType::NORMAL);
-            std::vector<glm::vec3> normals{normalsView.begin(), normalsView.end()};
-            meshDecl.vertexNormalData = normals.data();
+            meshDecl.vertexNormalData = &*normalsView.begin();
             meshDecl.vertexNormalStride = normalsView.stride();
         }
         if (mesh.hasVertexAttribute(models::AttributeType::TEXCOORD)) {
-            auto uvsView = mesh.vertexAttribute<glm::vec3>(models::AttributeType::TEXCOORD);
-            std::vector<glm::vec3> uvs{uvsView.begin(), uvsView.end()};
-            meshDecl.vertexUvData = uvs.data();
+            auto uvsView = mesh.vertexAttribute<glm::vec2>(models::AttributeType::TEXCOORD);
+            meshDecl.vertexUvData = &*uvsView.begin();
             meshDecl.vertexUvStride = uvsView.stride();
         }
 
         auto& indexData = mesh.indices();
-        meshDecl.indexCount = (uint32_t) indexData.count();
+        meshDecl.indexCount = (uint32_t) indexData.size();
         meshDecl.indexData = indexData.buffer().data();
         meshDecl.indexFormat = indexData.dataType() == models::DataType::U_INT ? xatlas::IndexFormat::UInt32 : xatlas::IndexFormat::UInt16;
 
@@ -111,34 +108,29 @@ void Atlas::apply(models::Model& model) {
         for (size_t vert = 0; vert < atlasMesh.vertexCount; vert++) {
             const auto& ivert = atlasMesh.vertexArray[vert];
             for (auto& va : vertexData) {
-                auto* src = &modelMesh.vertexAttribute(va.first)[ivert.xref];
-                memcpy(&va.second[vert], src, va.second.stride());
+                auto src = modelMesh.vertexAttribute(va.first)[ivert.xref];
+                memcpy(va.second[vert].begin(), src.begin(), va.second.stride());
             }
             uvs.emplace_back(ivert.uv[0] * uscale, ivert.uv[1] * vscale);
         }
 
         // Set the UVs
         auto& texcoords = vertexData[models::AttributeType::TEXCOORD] = models::TypedData{models::DataType::FLOAT, 2, uvs.size()};
-        // TODO: get raw view on vector and copy in one go
-        for (size_t index = 0; index < uvs.size(); index++) {
-            memcpy(&texcoords[index], &uvs[index], texcoords.stride());
-        }
+        texcoords.copyFrom(uvs.data());
 
         // Set new index buffer
         // TODO: get raw view on vector and copy in one go
         models::TypedData indices{models::DataType::U_INT, 1, atlasMesh.indexCount};
-        for (size_t index = 0; index < atlasMesh.indexCount; index++) {
-            memcpy(&indices[index], atlasMesh.indexArray + index, sizeof(int32_t));
-        }
+        indices.copyFrom(atlasMesh.indexArray);
         modelMesh.indices(std::move(indices));
 
         // Set all the updated vertex data
         modelMesh.vertexData(std::move(vertexData));
 
 #ifndef NDEBUG
-        assert(modelMesh.indices().count() == atlasMesh.indexCount);
+        assert(modelMesh.indices().size() == atlasMesh.indexCount);
         for (auto& va : modelMesh.vertexData()) {
-            assert(va.second.count() == atlasMesh.vertexCount);
+            assert(va.second.size() == atlasMesh.vertexCount);
         }
 #endif
     }

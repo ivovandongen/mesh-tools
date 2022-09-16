@@ -36,7 +36,7 @@ ModelLoadResult loadModel(const std::filesystem::path& file) {
     std::vector<Mesh> meshes;
     meshes.reserve(shapes.size());
     for (auto& shape : shapes) {
-        std::unordered_map<AttributeType, TypedData> vertexData;
+        VertexData vertexData;
         vertexData[AttributeType::POSITION] = TypedData{DataType::FLOAT, 3, copy<unsigned char>(shape.mesh.positions)};
         vertexData[AttributeType::NORMAL] = TypedData{DataType::FLOAT, 3, copy<unsigned char>(shape.mesh.normals)};
         vertexData[AttributeType::TEXCOORD] = TypedData{DataType::FLOAT, 2, copy<unsigned char>(shape.mesh.texcoords)};
@@ -72,11 +72,11 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
         // Vertex data
         auto positions = modelMesh.vertexAttribute<glm::vec3>(AttributeType::POSITION);
         auto normals = modelMesh.hasVertexAttribute(AttributeType::NORMAL)
-                               ? modelMesh.vertexAttribute<glm::vec3>(AttributeType::NORMAL).vector()
-                               : std::vector<glm::vec3>{};
+                               ? std::optional<DataView<glm::vec3>>{modelMesh.vertexAttribute<glm::vec3>(AttributeType::NORMAL)}
+                               : std::nullopt;
         auto texcoords = modelMesh.hasVertexAttribute(AttributeType::TEXCOORD)
-                                 ? modelMesh.vertexAttribute<glm::vec2>(AttributeType::TEXCOORD).vector()
-                                 : std::vector<glm::vec2>{};
+                                 ? std::optional<DataView<glm::vec2>>{modelMesh.vertexAttribute<glm::vec2>(AttributeType::TEXCOORD)}
+                                 : std::nullopt;
         for (size_t nvert = 0; nvert < positions.size(); nvert++) {
             const auto& position = positions[nvert];
 
@@ -84,14 +84,14 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
             fprintf(outobj, "v %f %f %f\n", position[0], position[1], position[2]);
 
             // Normal
-            if (!normals.empty()) {
-                const auto& normal = normals[nvert];
+            if (normals) {
+                const auto& normal = (*normals)[nvert];
                 fprintf(outobj, "vn %f %f %f\n", normal[0], normal[1], normal[2]);
             }
 
             // UV
-            if (!texcoords.empty()) {
-                const auto& uv = texcoords[nvert];
+            if (texcoords) {
+                const auto& uv = (*texcoords)[nvert];
                 // Flip y
                 fprintf(outobj, "vt %f %f\n", uv[0], 1 - uv[1]);
             }
@@ -99,12 +99,12 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
 
         // Faces
         fprintf(outobj, "s %d\n", 0);
-        auto indices = modelMesh.indices<uint32_t>().vector();
+        auto indices = modelMesh.indices<uint32_t>();
         for (int nface = 0; nface < indices.size() / 3; nface++) {
             int a = vertexCountBase + indices[nface * 3] + 1;
             int b = vertexCountBase + indices[nface * 3 + 1] + 1;
             int c = vertexCountBase + indices[nface * 3 + 2] + 1;
-            if (normals.empty()) {
+            if (normals) {
                 fprintf(outobj, "f %d/%d %d/%d %d/%d\n", a, a, b, b, c, c);
             } else {
                 fprintf(outobj, "f %d/%d/%d %d/%d/%d %d/%d/%d\n", a, a, a, b, b, b, c, c, c);

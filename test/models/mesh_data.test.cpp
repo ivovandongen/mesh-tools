@@ -18,7 +18,45 @@ TEST(MeshData, TypedData) {
     ASSERT_EQ(typedData.stride(), sizeof(T));
     ASSERT_EQ(typedData.componentSize(), sizeof(float));
     ASSERT_EQ(typedData.componentCount(), 2);
-    ASSERT_EQ(typedData.count(), 3);
+    ASSERT_EQ(typedData.size(), 3);
+
+    {
+        auto index = 0;
+        for (auto el : typedData) {
+            ASSERT_EQ(el.size(), sizeof(T));
+            T value = *((T*) el.begin());
+            ASSERT_EQ(value[0], data[index][0]);
+            ASSERT_EQ(value[1], data[index][1]);
+            index++;
+        }
+    }
+
+    for (size_t index = 0; index < data.size(); index++) {
+        auto bytes = typedData[index];
+        ASSERT_EQ(bytes.size(), sizeof(T));
+        T value = *((T*) bytes.begin());
+        ASSERT_EQ(value[0], data[index][0]);
+        ASSERT_EQ(value[1], data[index][1]);
+    }
+}
+
+TEST(MeshData, DataView) {
+    using T = glm::vec2;
+    std::vector<T> data{{0, 1}, {2, 3}, {4, 5}};
+    std::vector<unsigned char> raw;
+    raw.resize(data.size() * sizeof(T));
+    memcpy(raw.data(), data.data(), raw.size());
+
+    TypedData typedData{DataType::FLOAT, 2, raw};
+    DataView<T> dataView{typedData};
+
+    ASSERT_EQ(dataView.size(), data.size());
+    ASSERT_EQ(dataView.stride(), sizeof(T));
+    ASSERT_EQ(std::distance(dataView.begin(), dataView.end()), data.size());
+    for (size_t index = 0; index < data.size(); index++) {
+        ASSERT_EQ(data[index][0], dataView[index][0]);
+        ASSERT_EQ(data[index][1], dataView[index][1]);
+    }
 }
 
 TEST(MeshData, DataViewIterableIntegral) {
@@ -125,4 +163,36 @@ TEST(MeshData, DataViewIndexable) {
     ASSERT_FLOAT_EQ(dataView[1][0], 3);
     ASSERT_FLOAT_EQ(dataView[1][1], 4);
     ASSERT_FLOAT_EQ(dataView[1][2], 5);
+}
+
+TEST(MeshData, Copy) {
+    using T = uint16_t;
+    std::vector<T> data{0, 1, 2, 3, std::numeric_limits<T>::max()};
+    std::vector<unsigned char> raw;
+    raw.resize(data.size() * sizeof(T));
+    memcpy(raw.data(), data.data(), raw.size());
+
+    // Copy 1:1
+    {
+        TypedData typedData{DataType::U_SHORT, 1, raw};
+        DataView<T> dataView{typedData};
+        std::vector<unsigned char> result(dataView.size() * dataView.stride());
+        dataView.copyTo(result.data());
+
+        for (size_t index = 0; index < result.size(); index++) {
+            ASSERT_EQ(raw[index], result[index]);
+        }
+    }
+
+    // Copy with a view
+    {
+        TypedData typedData{DataType::U_SHORT, 1, raw};
+        DataView<uint32_t> dataView{typedData};
+        std::vector<unsigned char> result(dataView.size() * dataView.stride());
+        dataView.copyTo(result.data());
+
+        for (size_t index = 0; index < data.size(); index++) {
+            ASSERT_EQ(data[index], *((uint32_t*) (result.data() + index * sizeof(uint32_t))));
+        }
+    }
 }

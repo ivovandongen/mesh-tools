@@ -54,23 +54,21 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
     assert(scene);
 
     for (const auto& mesh : model.meshes()) {
-        auto& positions = mesh.vertexAttribute(models::AttributeType::POSITION);
+        auto positions = mesh.vertexAttribute<glm::vec3>(models::AttributeType::POSITION);
         // Populate the embree mesh.
         // TODO: Backface culling
         auto* geometry = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
         assert(geometry);
-        assert(positions.dataType() == models::DataType::FLOAT);
-        assert(positions.componentCount() == 3);
         auto* vertices =
-                rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, positions.stride(), positions.count());
+                rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, positions.stride(), positions.size());
         assert(vertices);
-        memcpy(vertices, positions.buffer().data(), positions.buffer().size());
+        positions.copyTo(vertices);
 
         auto indices = mesh.indices<uint32_t>();
         auto* triangles =
                 rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, 3 * sizeof(uint32_t), indices.size() / 3);
         assert(triangles);
-        memcpy(triangles, indices.raw(), sizeof(uint32_t) * indices.size());
+        indices.copyTo(triangles);
 
         rtcCommitGeometry(geometry);
         rtcAttachGeometry(scene, geometry);
@@ -101,9 +99,9 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
 
     for (const auto& mesh : model.meshes()) {
         assert(mesh.hasVertexAttribute(models::AttributeType::TEXCOORD));
-        assert(mesh.vertexAttribute(models::AttributeType::POSITION).count() ==
-               mesh.vertexAttribute(models::AttributeType::TEXCOORD).count());
-        auto indexCount = mesh.indices().count();
+        assert(mesh.vertexAttribute(models::AttributeType::POSITION).size() ==
+               mesh.vertexAttribute(models::AttributeType::TEXCOORD).size());
+        auto indexCount = mesh.indices().size();
         logging::debug("Ray trace - tracing {} triangles", indexCount / 3);
 
         auto indexView = mesh.indices<uint32_t>();

@@ -4,7 +4,7 @@
 
 using namespace meshtools;
 
-TEST(Model, Find) {
+TEST(Algorithm, Find) {
     struct Value {
         int a;
     };
@@ -19,7 +19,7 @@ TEST(Model, Find) {
     }
 }
 
-TEST(Model, FindConst) {
+TEST(Algorithm, FindConst) {
     struct Value {
         int a;
     };

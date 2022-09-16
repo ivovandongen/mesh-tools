@@ -16,10 +16,11 @@ enum class AttributeType {
     UNKNOWN,
 };
 
+using VertexData = std::unordered_map<AttributeType, TypedData>;
+
 class Mesh {
 public:
-    Mesh(std::string name, size_t originalMeshIndex, int materialIdx, TypedData indices,
-         std::unordered_map<AttributeType, TypedData> vertexData)
+    Mesh(std::string name, size_t originalMeshIndex, int materialIdx, TypedData indices, VertexData vertexData)
         : name_(std::move(name)), originalMeshIndex_(originalMeshIndex), materialIdx_(materialIdx), indices_(std::move(indices)),
           vertexData_(std::move(vertexData)) {}
 
@@ -80,11 +81,11 @@ public:
         vertexData_.erase(attribute);
     }
 
-    const std::unordered_map<AttributeType, TypedData>& vertexData() const {
+    const VertexData& vertexData() const {
         return vertexData_;
     }
 
-    void vertexData(std::unordered_map<AttributeType, TypedData> vertexData) {
+    void vertexData(VertexData vertexData) {
         vertexData_ = std::move(vertexData);
     }
 
@@ -93,7 +94,7 @@ private:
     size_t originalMeshIndex_;
     int materialIdx_;
     TypedData indices_;
-    std::unordered_map<AttributeType, TypedData> vertexData_;
+    VertexData vertexData_;
 };
 
 } // namespace meshtools::models

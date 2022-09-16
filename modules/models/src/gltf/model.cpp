@@ -182,7 +182,8 @@ std::vector<unsigned char> pack(T input, Fn&& fn) {
     return result;
 }
 
-std::array<glm::vec3, 2> minmax(const std::vector<glm::vec3>& positions) {
+template<class T>
+std::array<glm::vec3, 2> minmax(const T& positions) {
     constexpr const static auto max = std::numeric_limits<float>::max();
     constexpr const static auto min = -std::numeric_limits<float>::max();
     return std::accumulate(positions.begin(),
@@ -333,7 +334,7 @@ TypedData parseAttributeOr(const tinygltf::Model& gltfModel, const tinygltf::Pri
 
 Mesh parsePrimitive(const tinygltf::Model& gltfModel, const tinygltf::Mesh& gltfMesh, const tinygltf::Primitive& gltfPrimitive) {
     // Parse vertex attributes
-    std::unordered_map<AttributeType, TypedData> vertexData;
+    VertexData vertexData;
     for (const auto& attribute : gltfPrimitive.attributes) {
         vertexData.emplace(attributeType(attribute.first), parseAccessor(gltfModel, attribute.second));
     }
@@ -346,8 +347,8 @@ Mesh parsePrimitive(const tinygltf::Model& gltfModel, const tinygltf::Mesh& gltf
             // Generate indices
             logging::warn("No indices in primitive, generating");
             assert(vertexData.find(AttributeType::POSITION) != vertexData.end());
-            assert(vertexData[AttributeType::POSITION].count() % 3 == 0);
-            auto positionCount = vertexData[AttributeType::POSITION].count();
+            assert(vertexData[AttributeType::POSITION].size() % 3 == 0);
+            auto positionCount = vertexData[AttributeType::POSITION].size();
             std::vector<uint32_t> ib;
             ib.reserve(positionCount);
             for (uint32_t i = 0; i < positionCount; i++) {
@@ -535,7 +536,7 @@ void write(const Model& model, const std::filesystem::path& outFile) {
         auto& indexAccessor = gltfModel.accessors.emplace_back();
         indexAccessor.bufferView = indicesBufferViewIndex;
         indexAccessor.componentType = componentType(indexView.dataType());
-        indexAccessor.count = indexView.count();
+        indexAccessor.count = indexView.size();
         indexAccessor.type = TINYGLTF_TYPE_SCALAR;
         // Min max
         auto indices = mesh.indices<uint32_t>();
@@ -727,7 +728,7 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
         auto& indexAccessor = gltfModel.accessors.emplace_back();
         indexAccessor.bufferView = indicesBufferViewIndex;
         indexAccessor.componentType = componentType(indexView.dataType());
-        indexAccessor.count = indexView.count();
+        indexAccessor.count = indexView.size();
         indexAccessor.type = TINYGLTF_TYPE_SCALAR;
         // TODO: Min max
         auto indices = mesh.indices<uint32_t>();
@@ -759,10 +760,10 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
             auto& positionAccessor = gltfModel.accessors.emplace_back();
             positionAccessor.bufferView = positionBufferViewIndex;
             positionAccessor.componentType = componentType(positionsTypedData.dataType());
-            positionAccessor.count = positionsTypedData.count();
+            positionAccessor.count = positionsTypedData.size();
             positionAccessor.type = typeFromComponentCount(positionsTypedData.componentCount());
             //TODO min max
-            auto minMax = minmax(mesh.vertexAttribute<glm::vec3>(AttributeType::POSITION).vector());
+            auto minMax = minmax(mesh.vertexAttribute<glm::vec3>(AttributeType::POSITION));
             positionAccessor.minValues = std::vector<double>{minMax[0][0], minMax[0][1], minMax[0][2]};
             positionAccessor.maxValues = std::vector<double>{minMax[1][0], minMax[1][1], minMax[1][2]};
         }
@@ -780,7 +781,7 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
             auto& uvAccessor = gltfModel.accessors.emplace_back();
             uvAccessor.bufferView = uvBufferViewIndex;
             uvAccessor.componentType = componentType(uvsTypedData.dataType());
-            uvAccessor.count = uvsTypedData.count();
+            uvAccessor.count = uvsTypedData.size();
             uvAccessor.type = TINYGLTF_TYPE_VEC2;
         }
     }
