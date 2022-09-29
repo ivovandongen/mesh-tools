@@ -563,11 +563,11 @@ void write(const Model& model, const std::filesystem::path& outFile) {
             auto& gltfAccessor = gltfModel.accessors.emplace_back();
             gltfAccessor.bufferView = bufferViewIndex;
             gltfAccessor.componentType = componentType(typedData.dataType());
-            gltfAccessor.count = typedData.count();
+            gltfAccessor.count = typedData.size();
             gltfAccessor.type = typeFromComponentCount(typedData.componentCount());
             //TODO min max
             if (va.first == AttributeType::POSITION) {
-                auto minMax = minmax(mesh.vertexAttribute<glm::vec3>(AttributeType::POSITION).vector());
+                auto minMax = minmax(mesh.vertexAttribute<glm::vec3>(AttributeType::POSITION));
                 gltfAccessor.minValues = std::vector<double>{minMax[0][0], minMax[0][1], minMax[0][2]};
                 gltfAccessor.maxValues = std::vector<double>{minMax[1][0], minMax[1][1], minMax[1][2]};
             }
