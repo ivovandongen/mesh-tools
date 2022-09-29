@@ -243,10 +243,7 @@ namespace meshtools::models::gltf {
 
 void parseNodes(const tinygltf::Model& gltfModel, Model& model) {
     auto convertNode = [&](const tinygltf::Model&, const tinygltf::Node& in, Node& out) {
-        if (in.mesh > -1) {
-            // Use the original mesh indices to assign all the mesh indices for this node
-            out.meshes(find_indices(model.meshes(), [&](const auto& mesh) { return mesh.originalMeshIndex() == in.mesh; }));
-        }
+        out.mesh(in.mesh);
 
         if (in.matrix.size() == 16) {
             out.transform(glm::make_mat4x4(in.matrix.data()));
@@ -269,9 +266,10 @@ void parseNodes(const tinygltf::Model& gltfModel, Model& model) {
         }
     };
 
+    const constexpr int sceneIdx = 0; // TODO: Let's not worry about multiple scenes for now
     std::function<void(const tinygltf::Model&, const tinygltf::Node&, Node*)> processNode =
             [&](const tinygltf::Model& gltfModel, const tinygltf::Node& gltfNode, Node* parent) {
-                auto& converted = parent == nullptr ? model.nodes().emplace_back() : parent->children().emplace_back();
+                auto& converted = parent == nullptr ? model.nodes(sceneIdx).emplace_back() : parent->children().emplace_back();
                 convertNode(gltfModel, gltfNode, converted);
 
                 for (const auto& child : gltfNode.children) {
@@ -280,7 +278,7 @@ void parseNodes(const tinygltf::Model& gltfModel, Model& model) {
             };
 
     assert(!gltfModel.scenes.empty());
-    for (auto nodeIdx : gltfModel.scenes[0].nodes) {
+    for (auto nodeIdx : gltfModel.scenes[sceneIdx].nodes) {
         processNode(gltfModel, gltfModel.nodes[nodeIdx], nullptr);
     }
 }
@@ -360,14 +358,14 @@ Mesh parsePrimitive(const tinygltf::Model& gltfModel, const tinygltf::Mesh& gltf
 
     return {
             gltfMesh.name,
-            static_cast<size_t>(std::find(gltfModel.meshes.begin(), gltfModel.meshes.end(), gltfMesh) - gltfModel.meshes.begin()),
             gltfPrimitive.material,
             std::move(indices),
             std::move(vertexData),
+            {}, // TODO: parse extras
     };
 }
 
-std::vector<Mesh> parseMesh(const tinygltf::Model& gltfModel, const tinygltf::Mesh& gltfMesh) {
+MeshGroup parseMesh(const tinygltf::Model& gltfModel, const tinygltf::Mesh& gltfMesh) {
 
     std::vector<Mesh> meshes;
     meshes.reserve(gltfMesh.primitives.size());
@@ -376,21 +374,18 @@ std::vector<Mesh> parseMesh(const tinygltf::Model& gltfModel, const tinygltf::Me
                    std::back_inserter(meshes),
                    [&](const tinygltf::Primitive& gltfPrimitive) { return parsePrimitive(gltfModel, gltfMesh, gltfPrimitive); });
 
-    return meshes;
+    return {
+            gltfMesh.name,
+            std::move(meshes),
+            {}, // TODO extras
+    };
 }
 
 void parseMeshes(const tinygltf::Model& gltfModel, Model& model) {
-    model.meshes().clear();
-    model.meshes().reserve(
-            std::reduce(gltfModel.meshes.begin(), gltfModel.meshes.end(), size_t{0}, [](size_t sum, const tinygltf::Mesh& mesh) {
-                return sum + mesh.primitives.size();
-            }));
+    model.meshGroups().reserve(gltfModel.meshes.size());
 
     for (const auto& gltfMesh : gltfModel.meshes) {
-        auto meshes = parseMesh(gltfModel, gltfMesh);
-        for (auto& mesh : meshes) {
-            model.meshes().push_back(std::move(mesh));
-        }
+        model.meshGroups().push_back(parseMesh(gltfModel, gltfMesh));
     }
 }
 
@@ -515,80 +510,79 @@ void write(const Model& model, const std::filesystem::path& outFile) {
     auto& buffer = gltfModel.buffers.emplace_back();
 
     // Write meshes
-    std::set<size_t> meshIndices;
-    std::transform(model.meshes().begin(), model.meshes().end(), std::inserter(meshIndices, meshIndices.end()), [](const Mesh& mesh) {
-        return mesh.originalMeshIndex();
-    });
-    gltfModel.meshes.resize(meshIndices.size());
+    gltfModel.meshes.resize(model.meshGroups().size());
+    for (size_t meshIdx = 0; meshIdx < model.meshGroups().size(); meshIdx++) {
+        auto& meshGroup = model.meshGroups()[meshIdx];
+        auto& gltfMesh = gltfModel.meshes[meshIdx];
 
-    for (auto& mesh : model.meshes()) {
-        auto& gltfMesh = gltfModel.meshes[mesh.originalMeshIndex()];
+        // Primitives
+        for (auto& mesh : meshGroup.meshes()) {
+            // Add indices to buffer
+            auto& indexView = mesh.indices();
+            auto indicesBufferRange = appendToBuffer(buffer, indexView.buffer());
 
-        // Add indices to buffer
-        auto& indexView = mesh.indices();
-        auto indicesBufferRange = appendToBuffer(buffer, indexView.buffer());
+            // Add a BufferView for the indices
+            auto indicesBufferViewIndex = addBufferView(gltfModel, buffer, indicesBufferRange, TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER);
 
-        // Add a BufferView for the indices
-        auto indicesBufferViewIndex = addBufferView(gltfModel, buffer, indicesBufferRange, TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER);
+            // Add an accessor for the indices
+            auto indexAccessorIdx = gltfModel.accessors.size();
+            auto& indexAccessor = gltfModel.accessors.emplace_back();
+            indexAccessor.bufferView = indicesBufferViewIndex;
+            indexAccessor.componentType = componentType(indexView.dataType());
+            indexAccessor.count = indexView.size();
+            indexAccessor.type = TINYGLTF_TYPE_SCALAR;
+            // Min max
+            auto indices = mesh.indices<uint32_t>();
+            auto indexMinMax = std::minmax_element(indices.begin(), indices.end());
+            indexAccessor.maxValues.push_back(*indexMinMax.second);
+            indexAccessor.minValues.push_back(*indexMinMax.first);
 
-        // Add an accessor for the indices
-        auto indexAccessorIdx = gltfModel.accessors.size();
-        auto& indexAccessor = gltfModel.accessors.emplace_back();
-        indexAccessor.bufferView = indicesBufferViewIndex;
-        indexAccessor.componentType = componentType(indexView.dataType());
-        indexAccessor.count = indexView.size();
-        indexAccessor.type = TINYGLTF_TYPE_SCALAR;
-        // Min max
-        auto indices = mesh.indices<uint32_t>();
-        auto indexMinMax = std::minmax_element(indices.begin(), indices.end());
-        indexAccessor.maxValues.push_back(*indexMinMax.second);
-        indexAccessor.minValues.push_back(*indexMinMax.first);
+            // Add a primitive and a mesh
+            auto& gltfPrimitive = gltfMesh.primitives.emplace_back();
+            gltfPrimitive.indices = indexAccessorIdx;
+            gltfPrimitive.mode = TINYGLTF_MODE_TRIANGLES;
 
-        // Add a primitive and a mesh
-        auto& gltfPrimitive = gltfMesh.primitives.emplace_back();
-        gltfPrimitive.indices = indexAccessorIdx;
-        gltfPrimitive.mode = TINYGLTF_MODE_TRIANGLES;
+            // Add the vertex data
+            for (auto& va : mesh.vertexData()) {
+                auto attribute = attributeType(va.first);
+                auto& typedData = va.second;
+                auto bufferRange = appendToBuffer(buffer, typedData.buffer());
 
-        // Add the vertex data
-        for (auto& va : mesh.vertexData()) {
-            auto attribute = attributeType(va.first);
-            auto& typedData = va.second;
-            auto bufferRange = appendToBuffer(buffer, typedData.buffer());
+                // Add a buffer view
+                auto bufferViewIndex = addBufferView(gltfModel, buffer, bufferRange, TINYGLTF_TARGET_ARRAY_BUFFER);
 
-            // Add a buffer view
-            auto bufferViewIndex = addBufferView(gltfModel, buffer, bufferRange, TINYGLTF_TARGET_ARRAY_BUFFER);
-
-            // Add an accessor
-            gltfPrimitive.attributes[attribute] = gltfModel.accessors.size();
-            auto& gltfAccessor = gltfModel.accessors.emplace_back();
-            gltfAccessor.bufferView = bufferViewIndex;
-            gltfAccessor.componentType = componentType(typedData.dataType());
-            gltfAccessor.count = typedData.size();
-            gltfAccessor.type = typeFromComponentCount(typedData.componentCount());
-            //TODO min max
-            if (va.first == AttributeType::POSITION) {
-                auto minMax = minmax(mesh.vertexAttribute<glm::vec3>(AttributeType::POSITION));
-                gltfAccessor.minValues = std::vector<double>{minMax[0][0], minMax[0][1], minMax[0][2]};
-                gltfAccessor.maxValues = std::vector<double>{minMax[1][0], minMax[1][1], minMax[1][2]};
+                // Add an accessor
+                gltfPrimitive.attributes[attribute] = gltfModel.accessors.size();
+                auto& gltfAccessor = gltfModel.accessors.emplace_back();
+                gltfAccessor.bufferView = bufferViewIndex;
+                gltfAccessor.componentType = componentType(typedData.dataType());
+                gltfAccessor.count = typedData.size();
+                gltfAccessor.type = typeFromComponentCount(typedData.componentCount());
+                //TODO min max
+                if (va.first == AttributeType::POSITION) {
+                    auto minMax = minmax(mesh.vertexAttribute<glm::vec3>(AttributeType::POSITION));
+                    gltfAccessor.minValues = std::vector<double>{minMax[0][0], minMax[0][1], minMax[0][2]};
+                    gltfAccessor.maxValues = std::vector<double>{minMax[1][0], minMax[1][1], minMax[1][2]};
+                }
             }
-        }
 
-        // Material
-        if (mesh.materialIdx() >= 0) {
-            gltfPrimitive.material = mesh.materialIdx();
+            // Material
+            if (mesh.materialIdx() >= 0) {
+                gltfPrimitive.material = mesh.materialIdx();
+            }
         }
     }
 
 
     // TODO: Write nodes
-    gltfScene.nodes.resize(model.nodes().size());
+    gltfScene.nodes.resize(model.nodes(0).size());
     std::generate(gltfScene.nodes.begin(), gltfScene.nodes.end(), [n = 0]() mutable { return n++; });
 
-    for (auto& node : model.nodes()) {
+    for (auto& node : model.nodes(0)) {
         // TODO: child nodes
         // TODO: transform
         tinygltf::Node gltfNode{};
-        gltfNode.mesh = model.meshes()[node.meshes()[0]].originalMeshIndex();
+        gltfNode.mesh = node.mesh() ? *node.mesh() : -1;
         gltfModel.nodes.push_back(gltfNode);
     }
 

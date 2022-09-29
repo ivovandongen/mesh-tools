@@ -19,32 +19,100 @@ using ModelLoadResult = Result<class Model>;
 
 class Model {
 public:
-    class Impl;
-
     static ModelLoadResult Load(const std::filesystem::path& path);
 
-    Model(std::vector<Mesh> meshes, std::vector<Node> nodes);
+    Model(std::vector<MeshGroup> meshGroups, std::vector<Node> nodes);
 
-    explicit Model(std::vector<Mesh> meshes);
+    explicit Model(std::vector<MeshGroup> meshGroups);
 
     explicit Model();
 
     ~Model();
 
-    std::vector<Mesh>& meshes() {
-        return meshes_;
+    std::vector<MeshGroup>& meshGroups() {
+        return meshGroups_;
     }
 
-    const std::vector<Mesh>& meshes() const {
-        return meshes_;
+    const std::vector<MeshGroup>& meshGroups() const {
+        return meshGroups_;
     }
 
-    const std::vector<Node>& nodes() const {
-        return nodes_;
+    Mesh& mesh(size_t index) {
+        size_t i = 0;
+        for (auto& meshGroup : meshGroups_) {
+            auto localIndex = index - i;
+            if (localIndex < meshGroup.meshes().size()) {
+                return meshGroup.meshes()[localIndex];
+            }
+            i += meshGroup.meshes().size();
+        }
+
+        throw std::runtime_error("No mesh for this index");
+        assert(false);
     }
 
-    std::vector<Node>& nodes() {
-        return nodes_;
+    const Mesh& mesh(size_t index) const {
+        size_t i = 0;
+        for (auto& meshGroup : meshGroups_) {
+            auto localIndex = index - i;
+            if (localIndex < meshGroup.meshes().size()) {
+                return meshGroup.meshes()[localIndex];
+            }
+            i += meshGroup.meshes().size();
+        }
+
+        throw std::runtime_error("No mesh for this index");
+        assert(false);
+    }
+
+    const std::vector<Mesh> meshes(size_t scene = 0, const glm::mat4& rootTransform = {}) const {
+        assert(scene < scenes_.size());
+        auto& nodes = scenes_[scene];
+        std::vector<Mesh> meshes;
+        for (auto& node : nodes) {
+            const auto visitor = [&](const auto& node) {
+                auto meshIdx = node.mesh();
+                if (meshIdx) {
+                    const Mesh& orgMesh = mesh(*meshIdx);
+                    TypedData indices{
+                            orgMesh.indices().dataType(),
+                            orgMesh.indices().componentCount(),
+                            orgMesh.indices().buffer(),
+                    };
+
+                    // TODO: Transform
+                    VertexData vertexData;
+                    for (const auto& va : orgMesh.vertexData()) {
+                        vertexData[va.first] = {va.second.dataType(), va.second.componentCount(), va.second.buffer()};
+                    }
+
+                    meshes.emplace_back(orgMesh.name(), orgMesh.materialIdx(), std::move(indices), std::move(vertexData), orgMesh.extras());
+                }
+            };
+            node.visit(visitor);
+        }
+        return meshes;
+    }
+
+    template<class MeshVisitor>
+    void visit(const MeshVisitor& visitor) {
+        for (auto& meshGroup : meshGroups_) {
+            for (auto& mesh : meshGroup.meshes()) {
+                visitor(mesh);
+            }
+        }
+    }
+
+    const std::vector<Node>& nodes(size_t scene) const {
+        assert(scene < scenes_.size());
+        return scenes_[scene];
+    }
+
+    std::vector<Node>& nodes(size_t scene) {
+        if (scene >= scenes_.size()) {
+            scenes_.resize(scene + 1);
+        }
+        return scenes_[scene];
     }
 
     const std::vector<std::shared_ptr<Image>>& images() const {
@@ -84,8 +152,8 @@ public:
     void write(const std::filesystem::path& outFile) const;
 
 private:
-    std::vector<Mesh> meshes_;
-    std::vector<Node> nodes_;
+    std::vector<MeshGroup> meshGroups_;
+    std::vector<std::vector<Node>> scenes_;
     std::vector<std::shared_ptr<Image>> images_;
     std::vector<Sampler> samplers_;
     std::vector<Texture> textures_;

@@ -1,10 +1,12 @@
 #pragma once
 
 #include <meshtools/algorithm.hpp>
+#include <meshtools/models/extras.hpp>
 #include <meshtools/models/mesh_data.hpp>
 
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 namespace meshtools::models {
 
@@ -20,9 +22,8 @@ using VertexData = std::unordered_map<AttributeType, TypedData>;
 
 class Mesh {
 public:
-    Mesh(std::string name, size_t originalMeshIndex, int materialIdx, TypedData indices, VertexData vertexData)
-        : name_(std::move(name)), originalMeshIndex_(originalMeshIndex), materialIdx_(materialIdx), indices_(std::move(indices)),
-          vertexData_(std::move(vertexData)) {}
+    Mesh(std::string name, int materialIdx, TypedData indices, VertexData vertexData, Extras extras = {})
+        : name_(std::move(name)), materialIdx_(materialIdx), indices_(std::move(indices)), vertexData_(std::move(vertexData)) {}
 
     const TypedData& indices() const {
         return indices_;
@@ -61,10 +62,6 @@ public:
         return name_;
     }
 
-    size_t originalMeshIndex() const {
-        return originalMeshIndex_;
-    }
-
     int materialIdx() const {
         return materialIdx_;
     }
@@ -89,12 +86,47 @@ public:
         vertexData_ = std::move(vertexData);
     }
 
+    const Extras& extras() const {
+        return extras_;
+    }
+
 private:
     std::string name_;
-    size_t originalMeshIndex_;
     int materialIdx_;
     TypedData indices_;
     VertexData vertexData_;
+    Extras extras_;
+};
+
+class MeshGroup {
+public:
+    MeshGroup(std::string name, Mesh mesh, Extras extras = {}) : name_(std::move(name)), extras_(std::move(extras)) {
+        meshes_.push_back(std::move(mesh));
+    }
+
+    MeshGroup(std::string name, std::vector<Mesh> meshes, Extras extras = {})
+        : name_(std::move(name)), meshes_(std::move(meshes)), extras_(std::move(extras)) {}
+
+    const std::string& name() const {
+        return name_;
+    }
+
+    std::vector<Mesh>& meshes() {
+        return meshes_;
+    }
+
+    const std::vector<Mesh>& meshes() const {
+        return meshes_;
+    }
+
+    const Extras& extras() const {
+        return extras_;
+    }
+
+private:
+    std::string name_;
+    std::vector<Mesh> meshes_;
+    Extras extras_;
 };
 
 } // namespace meshtools::models

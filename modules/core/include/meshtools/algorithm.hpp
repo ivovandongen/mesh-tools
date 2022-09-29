@@ -1,5 +1,6 @@
 #pragma once
 
+#include <numeric>
 #include <vector>
 
 namespace meshtools {
@@ -73,6 +74,20 @@ T erase_and_get(Cont<T>& in, size_t index) {
 template<class T, class Fn>
 void erase_if(T& in, Fn&& fn) {
     in.erase(std::remove_if(in.begin(), in.end(), fn), in.end());
+}
+
+template<class T>
+std::vector<T> flatten(const std::vector<std::vector<T>>& in) {
+    std::vector<T> result;
+    result.reserve(std::accumulate(in.begin(), in.end(), 0, [](size_t acc, const std::vector<T>& sub) { return acc + sub.size(); }));
+
+    for (auto& sub : in) {
+        for (auto& val : sub) {
+            result.push_back(std::move(val));
+        }
+    }
+
+    return result;
 }
 
 } // namespace meshtools

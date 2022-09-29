@@ -33,3 +33,14 @@ TEST(Algorithm, FindConst) {
         ASSERT_EQ(val.get().a, 2);
     }
 }
+
+TEST(Algorithm, Flatten) {
+    std::vector<std::vector<int>> in{{1, 2, 3}, {4}, {5, 6}, {7}};
+
+    auto result = flatten(in);
+
+    ASSERT_EQ(result.size(), 7);
+    for (size_t i = 0; i < result.size(); i++) {
+        ASSERT_EQ(i + 1, result[i]);
+    }
+}

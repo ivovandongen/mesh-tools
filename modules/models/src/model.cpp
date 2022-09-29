@@ -11,14 +11,16 @@
 
 namespace meshtools::models {
 
-Model::Model(std::vector<Mesh> meshes) : meshes_(std::move(meshes)) {
-    nodes_.reserve(meshes_.size());
-    for (size_t i = 0; i < meshes_.size(); i++) {
-        nodes_.emplace_back(i);
+Model::Model(std::vector<MeshGroup> meshGroups) : meshGroups_(std::move(meshGroups)) {
+    auto& scene = scenes_[0];
+    scene.reserve(meshGroups_.size());
+    for (size_t i = 0; i < meshGroups_.size(); i++) {
+        scene.emplace_back(i);
     }
 }
 
-Model::Model(std::vector<Mesh> meshes, std::vector<Node> nodes) : meshes_(std::move(meshes)), nodes_(std::move(nodes)) {}
+Model::Model(std::vector<MeshGroup> meshGroups, std::vector<Node> nodes)
+    : meshGroups_(std::move(meshGroups)), scenes_({std::move(nodes)}) {}
 
 Model::Model() = default;
 

@@ -91,7 +91,7 @@ void Atlas::apply(models::Model& model) {
 
     for (size_t i = 0; i < model.meshes().size(); i++) {
         auto& atlasMesh = impl_->atlas_->meshes[i];
-        auto& modelMesh = model.meshes()[i];
+        auto& modelMesh = model.mesh(i);
 
         // Update all vertex attributes (except Texcoords)
         std::unordered_map<models::AttributeType, models::TypedData> vertexData;
