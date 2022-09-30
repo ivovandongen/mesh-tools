@@ -749,7 +749,7 @@ void write(const Model& model, const std::filesystem::path& outFile) {
 }
 
 void dump(const Model& model, const Image& aoMap, const std::filesystem::path& file) {
-    if (model.meshes().empty()) {
+    if (model.meshes(0, false).empty()) {
         logging::warn("No meshes to dump into {}", file.c_str());
         return;
     }
@@ -794,7 +794,8 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
     }();
 
 
-    for (auto& mesh : model.meshes()) {
+    // Dump the first scene
+    for (auto& mesh : model.meshes(0, false)) {
         // Add a node and mesh
         gltfModel.meshes.emplace_back();
         auto& node = gltfModel.nodes.emplace_back();

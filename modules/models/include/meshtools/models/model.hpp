@@ -65,7 +65,8 @@ public:
         assert(false);
     }
 
-    const std::vector<std::shared_ptr<Mesh>> meshes(size_t scene = 0, const glm::mat4& rootTransform = glm::mat4{1}) const {
+    const std::vector<std::shared_ptr<Mesh>> meshes(size_t scene, bool applyLocalTransforms,
+                                                    const glm::mat4& rootTransform = glm::mat4{1}) const {
         const constexpr glm::mat4 identity{1};
         assert(scene < scenes_.size());
         auto& nodes = scenes_[scene];
@@ -80,7 +81,7 @@ public:
                     // Cascade local transforms
                     cumulativeTransform = cumulativeTransform * node.transform();
 
-                    if (cumulativeTransform == identity) {
+                    if (!applyLocalTransforms || cumulativeTransform == identity) {
                         meshes.template emplace_back(orgMesh);
                     } else {
                         TypedData indices{

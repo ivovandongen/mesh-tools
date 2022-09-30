@@ -110,7 +110,7 @@ int main(int argc, char** argv) {
     // Take the first scene to create the AO map for
     // TODO: make scene selection an option
     // TODO: account for transforms
-    auto meshes = modelLoadResult.value->meshes(0);
+    auto meshes = modelLoadResult.value->meshes(0, false);
 
     auto resolution = options.resolution > 0 ? Size<uint32_t>{options.resolution, options.resolution} : Size<uint32_t>{};
     {
