@@ -30,12 +30,12 @@ public:
     Atlas();
     ~Atlas();
 
-    static Result<Atlas> Create(const models::Model& model, const AtlasCreateOptions& = {});
+    static Result<Atlas> Create(const std::vector<std::shared_ptr<models::Mesh>>& meshes, const AtlasCreateOptions& = {});
 
     uint32_t width() const;
     uint32_t height() const;
 
-    void apply(models::Model& model);
+    void apply(std::vector<std::shared_ptr<models::Mesh>>& meshes);
 
     size_t meshCount() const;
 

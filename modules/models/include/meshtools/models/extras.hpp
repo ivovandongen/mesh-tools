@@ -94,7 +94,8 @@ inline void swap(recursive_wrapper<T>& lhs, recursive_wrapper<T>& rhs) noexcept 
 struct Extra;
 using Extras = std::unordered_map<std::string, Extra>;
 using ExtraArray = std::vector<Extra>;
-using ExtraBase = std::variant<double, int32_t, bool, std::string, recursive_wrapper<ExtraArray>, recursive_wrapper<Extras>>;
+using ExtraBase = std::variant<std::monostate, double, int32_t, bool, std::string, std::vector<unsigned char>,
+                               recursive_wrapper<ExtraArray>, recursive_wrapper<Extras>>;
 
 struct Extra : ExtraBase {
     using ExtraBase::ExtraBase;

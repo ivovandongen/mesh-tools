@@ -9,8 +9,9 @@ namespace meshtools::models {
 
 class Node {
 public:
-    explicit Node() = default;
-    explicit Node(std::optional<size_t> mesh, glm::mat4 transform = glm::mat4{1}) : transform_(std::move(transform)), mesh_(mesh) {}
+    Node() = default;
+    explicit Node(std::optional<size_t> mesh, Extra extra = {}, glm::mat4 transform = glm::mat4{1})
+        : transform_(std::move(transform)), mesh_(mesh), extra_(std::move(extra)) {}
 
     std::optional<size_t> mesh() const {
         return mesh_;
@@ -36,6 +37,14 @@ public:
         return children_;
     }
 
+    void extra(Extra extra) {
+        extra_ = std::move(extra);
+    }
+
+    const Extra& extra() const {
+        return extra_;
+    }
+
     template<class Visitor>
     void visit(const Visitor& visitor) const {
         visitor(*this);
@@ -59,7 +68,7 @@ private:
     std::optional<size_t> mesh_;
     std::vector<Node> children_;
     std::string name_;
-    Extras extras_;
+    Extra extra_;
 };
 
 } // namespace meshtools::models

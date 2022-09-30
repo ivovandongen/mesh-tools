@@ -41,11 +41,11 @@ ModelLoadResult loadModel(const std::filesystem::path& file) {
         vertexData[AttributeType::NORMAL] = TypedData{DataType::FLOAT, 3, copy<unsigned char>(shape.mesh.normals)};
         vertexData[AttributeType::TEXCOORD] = TypedData{DataType::FLOAT, 2, copy<unsigned char>(shape.mesh.texcoords)};
 
-        Mesh mesh{shape.name,
-                  -1, // TODO: Material
-                  TypedData{DataType::U_INT, 1, copy<unsigned char>(shape.mesh.indices)},
-                  std::move(vertexData)};
-        meshes.emplace_back(shape.name, std::move(mesh), Extras{});
+        auto mesh = std::make_shared<Mesh>(shape.name,
+                                           -1, // TODO: Material
+                                           TypedData{DataType::U_INT, 1, copy<unsigned char>(shape.mesh.indices)},
+                                           std::move(vertexData));
+        meshes.emplace_back(shape.name, std::move(mesh), Extra{});
     }
 
     result.value = std::make_shared<Model>(std::move(meshes));
@@ -64,19 +64,19 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
     for (auto& meshGroup : model.meshGroups()) {
         for (size_t i = 0; i < meshGroup.meshes().size(); i++) {
             auto& modelMesh = meshGroup.meshes()[i];
-            if (modelMesh.name().empty()) {
+            if (modelMesh->name().empty()) {
                 fprintf(outobj, "o Object-%zu\n", i);
             } else {
-                fprintf(outobj, "o %s\n", modelMesh.name().c_str());
+                fprintf(outobj, "o %s\n", modelMesh->name().c_str());
             }
 
             // Vertex data
-            auto positions = modelMesh.vertexAttribute<glm::vec3>(AttributeType::POSITION);
-            auto normals = modelMesh.hasVertexAttribute(AttributeType::NORMAL)
-                                   ? std::optional<DataView<glm::vec3>>{modelMesh.vertexAttribute<glm::vec3>(AttributeType::NORMAL)}
+            auto positions = modelMesh->vertexAttribute<glm::vec3>(AttributeType::POSITION);
+            auto normals = modelMesh->hasVertexAttribute(AttributeType::NORMAL)
+                                   ? std::optional<DataView<glm::vec3>>{modelMesh->vertexAttribute<glm::vec3>(AttributeType::NORMAL)}
                                    : std::nullopt;
-            auto texcoords = modelMesh.hasVertexAttribute(AttributeType::TEXCOORD)
-                                     ? std::optional<DataView<glm::vec2>>{modelMesh.vertexAttribute<glm::vec2>(AttributeType::TEXCOORD)}
+            auto texcoords = modelMesh->hasVertexAttribute(AttributeType::TEXCOORD)
+                                     ? std::optional<DataView<glm::vec2>>{modelMesh->vertexAttribute<glm::vec2>(AttributeType::TEXCOORD)}
                                      : std::nullopt;
             for (size_t nvert = 0; nvert < positions.size(); nvert++) {
                 const auto& position = positions[nvert];
@@ -100,7 +100,7 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
 
             // Faces
             fprintf(outobj, "s %d\n", 0);
-            auto indices = modelMesh.indices<uint32_t>();
+            auto indices = modelMesh->indices<uint32_t>();
             for (int nface = 0; nface < indices.size() / 3; nface++) {
                 int a = vertexCountBase + indices[nface * 3] + 1;
                 int b = vertexCountBase + indices[nface * 3 + 1] + 1;

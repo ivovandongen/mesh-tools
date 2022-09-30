@@ -37,7 +37,7 @@ public:
         return meshGroups_;
     }
 
-    Mesh& mesh(size_t index) {
+    std::shared_ptr<Mesh>& mesh(size_t index) {
         size_t i = 0;
         for (auto& meshGroup : meshGroups_) {
             auto localIndex = index - i;
@@ -51,7 +51,7 @@ public:
         assert(false);
     }
 
-    const Mesh& mesh(size_t index) const {
+    const std::shared_ptr<Mesh>& mesh(size_t index) const {
         size_t i = 0;
         for (auto& meshGroup : meshGroups_) {
             auto localIndex = index - i;
@@ -65,28 +65,50 @@ public:
         assert(false);
     }
 
-    const std::vector<Mesh> meshes(size_t scene = 0, const glm::mat4& rootTransform = {}) const {
+    const std::vector<std::shared_ptr<Mesh>> meshes(size_t scene = 0, const glm::mat4& rootTransform = glm::mat4{1}) const {
+        const constexpr glm::mat4 identity{1};
         assert(scene < scenes_.size());
         auto& nodes = scenes_[scene];
-        std::vector<Mesh> meshes;
+        std::vector<std::shared_ptr<Mesh>> meshes;
         for (auto& node : nodes) {
-            const auto visitor = [&](const auto& node) {
+            glm::mat4 cumulativeTransform = rootTransform;
+            const auto visitor = [&](const Node& node) {
                 auto meshIdx = node.mesh();
                 if (meshIdx) {
-                    const Mesh& orgMesh = mesh(*meshIdx);
-                    TypedData indices{
-                            orgMesh.indices().dataType(),
-                            orgMesh.indices().componentCount(),
-                            orgMesh.indices().buffer(),
-                    };
+                    const auto& orgMesh = mesh(*meshIdx);
 
-                    // TODO: Transform
-                    VertexData vertexData;
-                    for (const auto& va : orgMesh.vertexData()) {
-                        vertexData[va.first] = {va.second.dataType(), va.second.componentCount(), va.second.buffer()};
+                    // Cascade local transforms
+                    cumulativeTransform = cumulativeTransform * node.transform();
+
+                    if (cumulativeTransform == identity) {
+                        meshes.template emplace_back(orgMesh);
+                    } else {
+                        TypedData indices{
+                                orgMesh->indices().dataType(),
+                                orgMesh->indices().componentCount(),
+                                orgMesh->indices().buffer(),
+                        };
+
+                        VertexData vertexData;
+                        for (const auto& va : orgMesh->vertexData()) {
+                            vertexData[va.first] = {va.second.dataType(), va.second.componentCount(), va.second.buffer()};
+                        }
+
+                        // Transform positions
+                        DataView<glm::vec3> positions{vertexData[AttributeType::POSITION]};
+                        std::vector<glm::vec3> transformed;
+                        transformed.reserve(positions.size());
+                        for (auto& pos : positions) {
+                            transformed.emplace_back(cumulativeTransform * glm::vec4{pos, 1});
+                        }
+                        vertexData[AttributeType::POSITION].copyFrom(transformed.data());
+
+                        meshes.emplace_back(std::make_shared<Mesh>(orgMesh->name(),
+                                                                   orgMesh->materialIdx(),
+                                                                   std::move(indices),
+                                                                   std::move(vertexData),
+                                                                   orgMesh->extra()));
                     }
-
-                    meshes.emplace_back(orgMesh.name(), orgMesh.materialIdx(), std::move(indices), std::move(vertexData), orgMesh.extras());
                 }
             };
             node.visit(visitor);
@@ -98,7 +120,7 @@ public:
     void visit(const MeshVisitor& visitor) {
         for (auto& meshGroup : meshGroups_) {
             for (auto& mesh : meshGroup.meshes()) {
-                visitor(mesh);
+                visitor(*mesh);
             }
         }
     }

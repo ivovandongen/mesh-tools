@@ -24,38 +24,38 @@ Atlas::Atlas() : impl_(std::make_unique<Atlas::Impl>()) {}
 
 Atlas::~Atlas() = default;
 
-Result<Atlas> Atlas::Create(const models::Model& model, const AtlasCreateOptions& options) {
+Result<Atlas> Atlas::Create(const std::vector<std::shared_ptr<models::Mesh>>& meshes, const AtlasCreateOptions& options) {
     Result<Atlas> result{std::make_shared<Atlas>()};
     xatlas::Atlas* atlas = result.value->impl_->atlas_;
 
     // Add meshes to atlas.
     uint32_t totalVertices = 0, totalFaces = 0;
-    for (const auto& mesh : model.meshes()) {
+    for (const auto& mesh : meshes) {
         xatlas::MeshDecl meshDecl;
-        auto positionsView = mesh.vertexAttribute<glm::vec3>(models::AttributeType::POSITION);
+        auto positionsView = mesh->vertexAttribute<glm::vec3>(models::AttributeType::POSITION);
         meshDecl.vertexCount = (uint32_t) positionsView.size();
         meshDecl.vertexPositionData = &*positionsView.begin();
         meshDecl.vertexPositionStride = positionsView.stride();
-        if (mesh.hasVertexAttribute(models::AttributeType::NORMAL)) {
-            auto normalsView = mesh.vertexAttribute<glm::vec3>(models::AttributeType::NORMAL);
+        if (mesh->hasVertexAttribute(models::AttributeType::NORMAL)) {
+            auto normalsView = mesh->vertexAttribute<glm::vec3>(models::AttributeType::NORMAL);
             meshDecl.vertexNormalData = &*normalsView.begin();
             meshDecl.vertexNormalStride = normalsView.stride();
         }
-        if (mesh.hasVertexAttribute(models::AttributeType::TEXCOORD)) {
-            auto uvsView = mesh.vertexAttribute<glm::vec2>(models::AttributeType::TEXCOORD);
+        if (mesh->hasVertexAttribute(models::AttributeType::TEXCOORD)) {
+            auto uvsView = mesh->vertexAttribute<glm::vec2>(models::AttributeType::TEXCOORD);
             meshDecl.vertexUvData = &*uvsView.begin();
             meshDecl.vertexUvStride = uvsView.stride();
         }
 
-        auto& indexData = mesh.indices();
+        auto& indexData = mesh->indices();
         meshDecl.indexCount = (uint32_t) indexData.size();
         meshDecl.indexData = indexData.buffer().data();
         meshDecl.indexFormat = indexData.dataType() == models::DataType::U_INT ? xatlas::IndexFormat::UInt32 : xatlas::IndexFormat::UInt16;
 
-        xatlas::AddMeshError error = xatlas::AddMesh(atlas, meshDecl, (uint32_t) model.meshes().size());
+        xatlas::AddMeshError error = xatlas::AddMesh(atlas, meshDecl, (uint32_t) meshes.size());
         if (error != xatlas::AddMeshError::Success) {
             xatlas::Destroy(atlas);
-            logging::error("Error adding mesh {}: {}", mesh.name().c_str(), xatlas::StringForEnum(error));
+            logging::error("Error adding mesh {}: {}", mesh->name().c_str(), xatlas::StringForEnum(error));
             result.error = xatlas::StringForEnum(error);
             return result;
         }
@@ -85,21 +85,21 @@ Result<Atlas> Atlas::Create(const models::Model& model, const AtlasCreateOptions
     return result;
 }
 
-void Atlas::apply(models::Model& model) {
+void Atlas::apply(std::vector<std::shared_ptr<models::Mesh>>& meshes) {
     const float uscale = 1.f / width();
     const float vscale = 1.f / height();
 
-    for (size_t i = 0; i < model.meshes().size(); i++) {
+    for (size_t i = 0; i < meshes.size(); i++) {
         auto& atlasMesh = impl_->atlas_->meshes[i];
-        auto& modelMesh = model.mesh(i);
+        auto& modelMesh = meshes[i];
 
         // Update all vertex attributes (except Texcoords)
         std::unordered_map<models::AttributeType, models::TypedData> vertexData;
-        for (auto key : modelMesh.vertexAttributes()) {
+        for (auto key : modelMesh->vertexAttributes()) {
             if (key == models::AttributeType::TEXCOORD) {
                 continue;
             }
-            auto& org = modelMesh.vertexAttribute(key);
+            auto& org = modelMesh->vertexAttribute(key);
             vertexData[key] = {org.dataType(), org.componentCount(), atlasMesh.vertexCount};
         }
 
@@ -108,7 +108,7 @@ void Atlas::apply(models::Model& model) {
         for (size_t vert = 0; vert < atlasMesh.vertexCount; vert++) {
             const auto& ivert = atlasMesh.vertexArray[vert];
             for (auto& va : vertexData) {
-                auto src = modelMesh.vertexAttribute(va.first)[ivert.xref];
+                auto src = modelMesh->vertexAttribute(va.first)[ivert.xref];
                 memcpy(va.second[vert].begin(), src.begin(), va.second.stride());
             }
             uvs.emplace_back(ivert.uv[0] * uscale, ivert.uv[1] * vscale);
@@ -122,14 +122,14 @@ void Atlas::apply(models::Model& model) {
         // TODO: get raw view on vector and copy in one go
         models::TypedData indices{models::DataType::U_INT, 1, atlasMesh.indexCount};
         indices.copyFrom(atlasMesh.indexArray);
-        modelMesh.indices(std::move(indices));
+        modelMesh->indices(std::move(indices));
 
         // Set all the updated vertex data
-        modelMesh.vertexData(std::move(vertexData));
+        modelMesh->vertexData(std::move(vertexData));
 
 #ifndef NDEBUG
-        assert(modelMesh.indices().size() == atlasMesh.indexCount);
-        for (auto& va : modelMesh.vertexData()) {
+        assert(modelMesh->indices().size() == atlasMesh.indexCount);
+        for (auto& va : modelMesh->vertexData()) {
             assert(va.second.size() == atlasMesh.vertexCount);
         }
 #endif

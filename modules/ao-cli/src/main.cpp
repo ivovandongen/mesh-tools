@@ -107,6 +107,11 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
+    // Take the first scene to create the AO map for
+    // TODO: make scene selection an option
+    // TODO: account for transforms
+    auto meshes = modelLoadResult.value->meshes(0);
+
     auto resolution = options.resolution > 0 ? Size<uint32_t>{options.resolution, options.resolution} : Size<uint32_t>{};
     {
         // Create UV Atlas
@@ -121,7 +126,7 @@ int main(int argc, char** argv) {
                 .blockAlign = true,
                 .bruteForce = false,
         };
-        auto atlasResult = uv::Atlas::Create(*modelLoadResult.value, atlasOptions);
+        auto atlasResult = uv::Atlas::Create(meshes, atlasOptions);
         if (!atlasResult) {
             logging::error("Could create UV atlas for model {}: {}", options.input.c_str(), atlasResult.error.c_str());
             return EXIT_FAILURE;
@@ -135,12 +140,12 @@ int main(int argc, char** argv) {
 
         // Apply atlas to model and working meshes
         logging::info("Applying UV Atlas");
-        atlasResult.value->apply(*modelLoadResult.value);
+        atlasResult.value->apply(meshes);
     }
 
     // Bake AO
     logging::info("Baking AO. Resolution {}x{}", resolution.width, resolution.height);
-    auto bakeResult = ao::bake(*modelLoadResult.value, resolution, {});
+    auto bakeResult = ao::bake(meshes, resolution, {});
     if (!bakeResult) {
         logging::error("Could not bake AO for model {}: {}", options.input.c_str(), bakeResult.error.c_str());
         return EXIT_FAILURE;

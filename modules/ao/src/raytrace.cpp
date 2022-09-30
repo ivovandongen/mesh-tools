@@ -12,6 +12,7 @@
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <memory>
 #include <random>
 #include <vector>
 
@@ -26,21 +27,21 @@ T sign(std::array<T, 2> p1, std::array<T, 2> p2, std::array<T, 2> p3) {
 
 // http://www.altdevblogaday.com/2012/05/03/generating-uniformly-distributed-points-on-sphere/
 glm::vec3 random_direction(std::mt19937& rnd) {
-    float z = 2.0f * rnd() / std::mt19937::max() - 1.0f;
-    float t = 2.0f * rnd() / std::mt19937::max() * M_PI;
-    float r = sqrtf(1.0f - z * z);
+    double z = 2.0f * rnd() / double(std::mt19937::max()) - 1.0;
+    double t = 2.0f * rnd() / double(std::mt19937::max()) * M_PI;
+    double r = sqrt(1.0 - z * z);
     return {r * cosf(t), r * sinf(t), z};
 }
 
-Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, RaytraceOptions options) {
-    if (std::any_of(model.meshes().begin(), model.meshes().end(), [](const models::Mesh& mesh) {
-            return !mesh.hasVertexAttribute(models::AttributeType::TEXCOORD);
+Result<Image> raytrace(const std::vector<std::shared_ptr<models::Mesh>>& meshes, const Size<uint32_t>& size, RaytraceOptions options) {
+    if (std::any_of(meshes.begin(), meshes.end(), [](const std::shared_ptr<models::Mesh>& mesh) {
+            return !mesh->hasVertexAttribute(models::AttributeType::TEXCOORD);
         })) {
         return {"Cannot raytrace models without texture coordinates"};
     }
 
-    if (std::any_of(model.meshes().begin(), model.meshes().end(), [](const models::Mesh& mesh) {
-            return !mesh.hasVertexAttribute(models::AttributeType::NORMAL);
+    if (std::any_of(meshes.begin(), meshes.end(), [](const std::shared_ptr<models::Mesh>& mesh) {
+            return !mesh->hasVertexAttribute(models::AttributeType::NORMAL);
         })) {
         return {"Cannot raytrace models without normals"};
     }
@@ -53,8 +54,8 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
     RTCScene scene = rtcNewScene(device);
     assert(scene);
 
-    for (const auto& mesh : model.meshes()) {
-        auto positions = mesh.vertexAttribute<glm::vec3>(models::AttributeType::POSITION);
+    for (const auto& mesh : meshes) {
+        auto positions = mesh->vertexAttribute<glm::vec3>(models::AttributeType::POSITION);
         // Populate the embree mesh.
         // TODO: Backface culling
         auto* geometry = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
@@ -64,7 +65,7 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
         assert(vertices);
         positions.copyTo(vertices);
 
-        auto indices = mesh.indices<uint32_t>();
+        auto indices = mesh->indices<uint32_t>();
         auto* triangles =
                 rtcSetNewGeometryBuffer(geometry, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, 3 * sizeof(uint32_t), indices.size() / 3);
         assert(triangles);
@@ -97,17 +98,17 @@ Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, R
         randomDirs.push_back(random_direction(rnd));
     }
 
-    for (const auto& mesh : model.meshes()) {
-        assert(mesh.hasVertexAttribute(models::AttributeType::TEXCOORD));
-        assert(mesh.vertexAttribute(models::AttributeType::POSITION).size() ==
-               mesh.vertexAttribute(models::AttributeType::TEXCOORD).size());
-        auto indexCount = mesh.indices().size();
+    for (const auto& mesh : meshes) {
+        assert(mesh->hasVertexAttribute(models::AttributeType::TEXCOORD));
+        assert(mesh->vertexAttribute(models::AttributeType::POSITION).size() ==
+               mesh->vertexAttribute(models::AttributeType::TEXCOORD).size());
+        auto indexCount = mesh->indices().size();
         logging::debug("Ray trace - tracing {} triangles", indexCount / 3);
 
-        auto indexView = mesh.indices<uint32_t>();
-        auto positionsView = mesh.vertexAttribute<glm::vec3>(models::AttributeType::POSITION);
-        auto normalsView = mesh.vertexAttribute<glm::vec3>(models::AttributeType::NORMAL);
-        auto texcoordsView = mesh.vertexAttribute<glm::vec2>(models::AttributeType::TEXCOORD);
+        auto indexView = mesh->indices<uint32_t>();
+        auto positionsView = mesh->vertexAttribute<glm::vec3>(models::AttributeType::POSITION);
+        auto normalsView = mesh->vertexAttribute<glm::vec3>(models::AttributeType::NORMAL);
+        auto texcoordsView = mesh->vertexAttribute<glm::vec2>(models::AttributeType::TEXCOORD);
 
         for (uint32_t j = 0; j < indexCount; j += 3) {
             //            logging::debug("Rasterizing {}/{}", j / 3, indexCount / 3);

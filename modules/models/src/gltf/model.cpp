@@ -16,6 +16,88 @@
 #include <vector>
 
 namespace {
+using namespace meshtools;
+
+tinygltf::Value toValue(const models::Extra& meta);
+
+struct ToValue {
+    tinygltf::Value operator()(const models::Extras& value) const {
+        tinygltf::Value::Object result;
+
+        for (auto& entry : value) {
+            result[entry.first] = tinygltf::Value{std::visit(ToValue{}, entry.second)};
+        }
+
+        return tinygltf::Value{result};
+    }
+
+    tinygltf::Value operator()(const models::ExtraArray& array) const {
+        tinygltf::Value::Array result;
+        result.reserve(array.size());
+        std::transform(array.begin(), array.end(), std::back_inserter(result), [](const models::Extra& extra) {
+            return std::visit(ToValue{}, extra);
+        });
+        return tinygltf::Value{result};
+    }
+
+    tinygltf::Value operator()(const models::recursive_wrapper<models::ExtraArray>& value) const {
+        return this->operator()(value.get());
+    }
+
+    tinygltf::Value operator()(const models::recursive_wrapper<models::Extras>& value) const {
+        return this->operator()(value.get());
+    }
+
+    tinygltf::Value operator()(const std::monostate& value) const {
+        return tinygltf::Value{};
+    }
+
+    tinygltf::Value operator()(std::vector<unsigned char> value) const {
+        return tinygltf::Value{std::move(value)};
+    }
+
+    template<class T>
+    tinygltf::Value operator()(const T& value) const {
+        return tinygltf::Value{value};
+    }
+};
+
+tinygltf::Value toValue(const models::Extra& extra) {
+    return std::visit(ToValue{}, extra);
+}
+
+models::Extra fromValue(const tinygltf::Value& value) {
+    if (value.Type() == tinygltf::NULL_TYPE) {
+        return {std::monostate()};
+    } else if (value.IsArray()) {
+        models::ExtraArray result;
+        result.reserve(value.Size());
+        for (size_t i = 0; i < value.Size(); i++) {
+            result.emplace_back(fromValue(value.Get(i)));
+        }
+        return result;
+    } else if (value.IsObject()) {
+        models::Extras result;
+        result.reserve(value.Size());
+        for (auto& key : value.Keys()) {
+            result.emplace(key, fromValue(value.Get(key)));
+        }
+        return result;
+    } else if (value.IsBinary()) {
+        return {value.Get<std::vector<unsigned char>>()};
+    } else if (value.IsBool()) {
+        return {value.Get<bool>()};
+    } else if (value.IsInt()) {
+        return {value.Get<int>()};
+    } else if (value.IsReal()) {
+        return {value.Get<double>()};
+    } else if (value.IsString()) {
+        return {value.Get<std::string>()};
+    }
+
+    assert(false && "Unknown type");
+    return {std::monostate()};
+}
 
 std::string text(tinygltf::Model& model) {
     std::stringstream os;
@@ -243,8 +325,13 @@ namespace meshtools::models::gltf {
 
 void parseNodes(const tinygltf::Model& gltfModel, Model& model) {
     auto convertNode = [&](const tinygltf::Model&, const tinygltf::Node& in, Node& out) {
+        // Mesh
         out.mesh(in.mesh);
 
+        // Extras
+        out.extra(fromValue(in.extras));
+
+        // Transform
         if (in.matrix.size() == 16) {
             out.transform(glm::make_mat4x4(in.matrix.data()));
         } else {
@@ -330,7 +417,8 @@ TypedData parseAttributeOr(const tinygltf::Model& gltfModel, const tinygltf::Pri
     return parseAccessor(gltfModel, it->second);
 };
 
-Mesh parsePrimitive(const tinygltf::Model& gltfModel, const tinygltf::Mesh& gltfMesh, const tinygltf::Primitive& gltfPrimitive) {
+std::shared_ptr<Mesh> parsePrimitive(const tinygltf::Model& gltfModel, const tinygltf::Mesh& gltfMesh,
+                                     const tinygltf::Primitive& gltfPrimitive) {
     // Parse vertex attributes
     VertexData vertexData;
     for (const auto& attribute : gltfPrimitive.attributes) {
@@ -356,18 +444,16 @@ Mesh parsePrimitive(const tinygltf::Model& gltfModel, const tinygltf::Mesh& gltf
         }
     }();
 
-    return {
-            gltfMesh.name,
-            gltfPrimitive.material,
-            std::move(indices),
-            std::move(vertexData),
-            {}, // TODO: parse extras
-    };
+    return std::make_shared<Mesh>(gltfMesh.name,
+                                  gltfPrimitive.material,
+                                  std::move(indices),
+                                  std::move(vertexData),
+                                  fromValue(gltfPrimitive.extras));
 }
 
 MeshGroup parseMesh(const tinygltf::Model& gltfModel, const tinygltf::Mesh& gltfMesh) {
 
-    std::vector<Mesh> meshes;
+    std::vector<std::shared_ptr<Mesh>> meshes;
     meshes.reserve(gltfMesh.primitives.size());
     std::transform(gltfMesh.primitives.begin(),
                    gltfMesh.primitives.end(),
@@ -377,7 +463,7 @@ MeshGroup parseMesh(const tinygltf::Model& gltfModel, const tinygltf::Mesh& gltf
     return {
             gltfMesh.name,
             std::move(meshes),
-            {}, // TODO extras
+            fromValue(gltfMesh.extras),
     };
 }
 
@@ -385,7 +471,7 @@ void parseMeshes(const tinygltf::Model& gltfModel, Model& model) {
     model.meshGroups().reserve(gltfModel.meshes.size());
 
     for (const auto& gltfMesh : gltfModel.meshes) {
-        model.meshGroups().push_back(parseMesh(gltfModel, gltfMesh));
+        model.meshGroups().emplace_back(parseMesh(gltfModel, gltfMesh));
     }
 }
 
@@ -514,11 +600,12 @@ void write(const Model& model, const std::filesystem::path& outFile) {
     for (size_t meshIdx = 0; meshIdx < model.meshGroups().size(); meshIdx++) {
         auto& meshGroup = model.meshGroups()[meshIdx];
         auto& gltfMesh = gltfModel.meshes[meshIdx];
+        gltfMesh.extras = toValue(meshGroup.extras());
 
         // Primitives
         for (auto& mesh : meshGroup.meshes()) {
             // Add indices to buffer
-            auto& indexView = mesh.indices();
+            auto& indexView = mesh->indices();
             auto indicesBufferRange = appendToBuffer(buffer, indexView.buffer());
 
             // Add a BufferView for the indices
@@ -532,7 +619,7 @@ void write(const Model& model, const std::filesystem::path& outFile) {
             indexAccessor.count = indexView.size();
             indexAccessor.type = TINYGLTF_TYPE_SCALAR;
             // Min max
-            auto indices = mesh.indices<uint32_t>();
+            auto indices = mesh->indices<uint32_t>();
             auto indexMinMax = std::minmax_element(indices.begin(), indices.end());
             indexAccessor.maxValues.push_back(*indexMinMax.second);
             indexAccessor.minValues.push_back(*indexMinMax.first);
@@ -543,7 +630,7 @@ void write(const Model& model, const std::filesystem::path& outFile) {
             gltfPrimitive.mode = TINYGLTF_MODE_TRIANGLES;
 
             // Add the vertex data
-            for (auto& va : mesh.vertexData()) {
+            for (auto& va : mesh->vertexData()) {
                 auto attribute = attributeType(va.first);
                 auto& typedData = va.second;
                 auto bufferRange = appendToBuffer(buffer, typedData.buffer());
@@ -560,16 +647,19 @@ void write(const Model& model, const std::filesystem::path& outFile) {
                 gltfAccessor.type = typeFromComponentCount(typedData.componentCount());
                 //TODO min max
                 if (va.first == AttributeType::POSITION) {
-                    auto minMax = minmax(mesh.vertexAttribute<glm::vec3>(AttributeType::POSITION));
+                    auto minMax = minmax(mesh->vertexAttribute<glm::vec3>(AttributeType::POSITION));
                     gltfAccessor.minValues = std::vector<double>{minMax[0][0], minMax[0][1], minMax[0][2]};
                     gltfAccessor.maxValues = std::vector<double>{minMax[1][0], minMax[1][1], minMax[1][2]};
                 }
             }
 
             // Material
-            if (mesh.materialIdx() >= 0) {
-                gltfPrimitive.material = mesh.materialIdx();
+            if (mesh->materialIdx() >= 0) {
+                gltfPrimitive.material = mesh->materialIdx();
             }
+
+            // Extras
+            gltfPrimitive.extras = toValue(mesh->extra());
         }
     }
 
@@ -583,6 +673,7 @@ void write(const Model& model, const std::filesystem::path& outFile) {
         // TODO: transform
         tinygltf::Node gltfNode{};
         gltfNode.mesh = node.mesh() ? *node.mesh() : -1;
+        gltfNode.extras = toValue(node.extra());
         gltfModel.nodes.push_back(gltfNode);
     }
 
@@ -711,7 +802,7 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
         scene.nodes.push_back(gltfModel.nodes.size() - 1);
 
         // Add indices to buffer
-        auto& indexView = mesh.indices();
+        auto& indexView = mesh->indices();
         auto indicesBufferRange = appendToBuffer(buffer, indexView.buffer());
 
         // Add a BufferView for the indices
@@ -725,7 +816,7 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
         indexAccessor.count = indexView.size();
         indexAccessor.type = TINYGLTF_TYPE_SCALAR;
         // TODO: Min max
-        auto indices = mesh.indices<uint32_t>();
+        auto indices = mesh->indices<uint32_t>();
         auto indexMinMax = std::minmax_element(indices.begin(), indices.end());
         indexAccessor.maxValues.push_back(*indexMinMax.second);
         indexAccessor.minValues.push_back(*indexMinMax.first);
@@ -738,12 +829,12 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
         // Add a material
         primitive.material = gltfModel.materials.size();
         auto& material = gltfModel.materials.emplace_back();
-        material.name = mesh.name();
+        material.name = mesh->name();
         material.occlusionTexture.index = aoTextureIndex;
 
         // Add the position data
         {
-            auto& positionsTypedData = mesh.vertexAttribute(AttributeType::POSITION);
+            auto& positionsTypedData = mesh->vertexAttribute(AttributeType::POSITION);
             auto positionBufferRange = appendToBuffer(buffer, positionsTypedData.buffer());
 
             // Add a BufferView for the positions
@@ -757,14 +848,14 @@ void dump(const Model& model, const Image& aoMap, const std::filesystem::path& f
             positionAccessor.count = positionsTypedData.size();
             positionAccessor.type = typeFromComponentCount(positionsTypedData.componentCount());
             //TODO min max
-            auto minMax = minmax(mesh.vertexAttribute<glm::vec3>(AttributeType::POSITION));
+            auto minMax = minmax(mesh->vertexAttribute<glm::vec3>(AttributeType::POSITION));
             positionAccessor.minValues = std::vector<double>{minMax[0][0], minMax[0][1], minMax[0][2]};
             positionAccessor.maxValues = std::vector<double>{minMax[1][0], minMax[1][1], minMax[1][2]};
         }
 
         // Add the uv data and albedo and baseColor texture
-        if (mesh.hasVertexAttribute(AttributeType::TEXCOORD)) {
-            auto& uvsTypedData = mesh.vertexAttribute(AttributeType::TEXCOORD);
+        if (mesh->hasVertexAttribute(AttributeType::TEXCOORD)) {
+            auto& uvsTypedData = mesh->vertexAttribute(AttributeType::TEXCOORD);
             auto uvBufferRange = appendToBuffer(buffer, uvsTypedData.buffer());
 
             // Add a BufferView for the uvs

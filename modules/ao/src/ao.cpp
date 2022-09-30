@@ -16,8 +16,8 @@ inline RaytraceOptions createOptions(const BakeOptions& options) {
     };
 }
 
-Result<Image> bake(const models::Model& model, const Size<uint32_t>& mapSize, const BakeOptions& options) {
-    auto raytraceResult = raytrace(model, mapSize, createOptions(options));
+Result<Image> bake(const std::vector<std::shared_ptr<models::Mesh>>& meshes, const Size<uint32_t>& mapSize, const BakeOptions& options) {
+    auto raytraceResult = raytrace(meshes, mapSize, createOptions(options));
     if (!raytraceResult) {
         return {std::move(raytraceResult.error)};
     }

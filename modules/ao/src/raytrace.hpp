@@ -5,6 +5,7 @@
 #include <meshtools/result.hpp>
 #include <meshtools/size.hpp>
 
+#include <memory>
 #include <vector>
 
 namespace meshtools::ao {
@@ -16,6 +17,6 @@ struct RaytraceOptions {
     float multiply;
 };
 
-Result<Image> raytrace(const models::Model& model, const Size<uint32_t>& size, RaytraceOptions = {});
+Result<Image> raytrace(const std::vector<std::shared_ptr<models::Mesh>>& meshes, const Size<uint32_t>& size, RaytraceOptions = {});
 
 } // namespace meshtools::ao

@@ -142,9 +142,13 @@ struct TypedData {
     }
 
     TypedData() = default;
+
+    // Delete copy
     TypedData(const TypedData&) = delete;
-    TypedData(TypedData&&) = default;
     TypedData& operator=(const TypedData&) = delete;
+
+    // Keep move
+    TypedData(TypedData&&) = default;
     TypedData& operator=(TypedData&&) = default;
 
     size_t componentCount() const {

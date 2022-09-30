@@ -22,8 +22,17 @@ using VertexData = std::unordered_map<AttributeType, TypedData>;
 
 class Mesh {
 public:
-    Mesh(std::string name, int materialIdx, TypedData indices, VertexData vertexData, Extras extras = {})
-        : name_(std::move(name)), materialIdx_(materialIdx), indices_(std::move(indices)), vertexData_(std::move(vertexData)) {}
+    Mesh(std::string name, int materialIdx, TypedData indices, VertexData vertexData, Extra extra = {})
+        : name_(std::move(name)), materialIdx_(materialIdx), indices_(std::move(indices)), vertexData_(std::move(vertexData)),
+          extra_(std::move(extra)) {}
+
+    // Delete copy
+    Mesh(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
+
+    // Keep move
+    Mesh(Mesh&&) = default;
+    Mesh& operator=(Mesh&&) = default;
 
     const TypedData& indices() const {
         return indices_;
@@ -86,8 +95,8 @@ public:
         vertexData_ = std::move(vertexData);
     }
 
-    const Extras& extras() const {
-        return extras_;
+    const Extra& extra() const {
+        return extra_;
     }
 
 private:
@@ -95,38 +104,46 @@ private:
     int materialIdx_;
     TypedData indices_;
     VertexData vertexData_;
-    Extras extras_;
+    Extra extra_;
 };
 
 class MeshGroup {
 public:
-    MeshGroup(std::string name, Mesh mesh, Extras extras = {}) : name_(std::move(name)), extras_(std::move(extras)) {
+    MeshGroup(std::string name, std::shared_ptr<Mesh> mesh, Extra extra = {}) : name_(std::move(name)), extra_(std::move(extra)) {
         meshes_.push_back(std::move(mesh));
     }
 
-    MeshGroup(std::string name, std::vector<Mesh> meshes, Extras extras = {})
-        : name_(std::move(name)), meshes_(std::move(meshes)), extras_(std::move(extras)) {}
+    MeshGroup(std::string name, std::vector<std::shared_ptr<Mesh>> meshes, Extra extra = {})
+        : name_(std::move(name)), meshes_(std::move(meshes)), extra_(std::move(extra)) {}
+
+    // Delete copy
+    MeshGroup(const MeshGroup&) = delete;
+    MeshGroup& operator=(const MeshGroup&) = delete;
+
+    // Keep move
+    MeshGroup(MeshGroup&&) = default;
+    MeshGroup& operator=(MeshGroup&&) = default;
 
     const std::string& name() const {
         return name_;
     }
 
-    std::vector<Mesh>& meshes() {
+    std::vector<std::shared_ptr<Mesh>>& meshes() {
         return meshes_;
     }
 
-    const std::vector<Mesh>& meshes() const {
+    const std::vector<std::shared_ptr<Mesh>>& meshes() const {
         return meshes_;
     }
 
-    const Extras& extras() const {
-        return extras_;
+    const Extra& extras() const {
+        return extra_;
     }
 
 private:
     std::string name_;
-    std::vector<Mesh> meshes_;
-    Extras extras_;
+    std::vector<std::shared_ptr<Mesh>> meshes_;
+    Extra extra_;
 };
 
 } // namespace meshtools::models
