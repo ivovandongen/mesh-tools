@@ -39,7 +39,7 @@ macro(ADD_MODULE MODULE_NAME)
                 $<INSTALL_INTERFACE:include>
                 )
 
-        #        target_link_libraries(${MODULE_NAME} PUBLIC meshtools-general-compile-options)
+        target_link_libraries(${MODULE_NAME} PUBLIC meshtools-general-compile-options)
 
         clang_tidy(${MODULE_NAME})
     else ()
@@ -51,7 +51,7 @@ macro(ADD_MODULE MODULE_NAME)
                 $<INSTALL_INTERFACE:include>
                 )
 
-        target_link_libraries(${MODULE_NAME} INTERFACE frck-general-compile-options)
+        target_link_libraries(${MODULE_NAME} INTERFACE meshtools-general-compile-options)
     endif ()
 
     # Add clang-format target
