@@ -2,6 +2,6 @@ add_module(ao)
 
 include_vendor_pkg(embree)
 
-target_link_libraries(ao PUBLIC core models PRIVATE embree)
+meshtools_module_link_libraries(TARGET ao PUBLIC Meshtools::core Meshtools::models PRIVATE embree)
 
 cpp_as_objcpp(${CMAKE_CURRENT_SOURCE_DIR})

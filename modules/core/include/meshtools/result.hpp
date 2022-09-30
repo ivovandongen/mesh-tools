@@ -14,6 +14,11 @@ struct Result {
     std::shared_ptr<T> value;
     std::string error;
 
+    T* operator->() {
+        assert(value);
+        return value.get();
+    }
+
     operator bool() const {
         return error.empty() && value.operator bool();
     }

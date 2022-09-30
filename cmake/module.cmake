@@ -1,4 +1,11 @@
-macro(ADD_MODULE MODULE_NAME)
+include(GenerateExportHeader)
+
+macro(ADD_MODULE MODULE_NAME_RAW)
+    if (MESHTOOLS_SUB_BUILD)
+        set(MODULE_NAME "meshtools-${MODULE_NAME_RAW}")
+    else ()
+        set(MODULE_NAME ${MODULE_NAME_RAW})
+    endif ()
 
     message(STATUS "modules: adding module ${MODULE_NAME}")
 
@@ -40,8 +47,10 @@ macro(ADD_MODULE MODULE_NAME)
                 )
 
         target_link_libraries(${MODULE_NAME} PUBLIC meshtools-general-compile-options)
+        generate_export_header(${MODULE_NAME})
 
         clang_tidy(${MODULE_NAME})
+        add_library(Meshtools::${MODULE_NAME_RAW} ALIAS ${MODULE_NAME})
     else ()
         # Interface library
         add_library(${MODULE_NAME} INTERFACE)
@@ -52,7 +61,16 @@ macro(ADD_MODULE MODULE_NAME)
                 )
 
         target_link_libraries(${MODULE_NAME} INTERFACE meshtools-general-compile-options)
+        generate_export_header(${MODULE_NAME})
+        add_library(Meshtools::${MODULE_NAME_RAW} ALIAS ${MODULE_NAME})
     endif ()
+
+    install(TARGETS ${MODULE_NAME} EXPORT MeshtoolsTargets
+            LIBRARY DESTINATION lib
+            ARCHIVE DESTINATION lib
+            RUNTIME DESTINATION bin
+            INCLUDES DESTINATION include
+            )
 
     # Add clang-format target
     clang_format(${CMAKE_CURRENT_SOURCE_DIR})
@@ -61,3 +79,20 @@ macro(ADD_MODULE MODULE_NAME)
     set_target_properties(${MODULE_NAME} PROPERTIES FOLDER modules)
 
 endmacro(ADD_MODULE)
+
+macro(MESHTOOLS_MODULE_LINK_LIBRARIES)
+    cmake_parse_arguments(args
+            "" #options
+            "TARGET" #single value
+            "PRIVATE;PUBLIC" #multi value
+            ${ARGN}
+            )
+    if (MESHTOOLS_SUB_BUILD)
+        set(MODULE_NAME "meshtools-${args_TARGET}")
+    else ()
+        set(MODULE_NAME ${args_TARGET})
+    endif ()
+
+    target_link_libraries(${MODULE_NAME} PUBLIC ${args_PUBLIC})
+    target_link_libraries(${MODULE_NAME} PRIVATE ${args_PRIVATE})
+endmacro(MESHTOOLS_MODULE_LINK_LIBRARIES)

@@ -1,6 +1,10 @@
 include_guard_x()
 
-set(GTEST_DIR ${CMAKE_SOURCE_DIR}/deps/googletest/googletest)
+if (TARGET gtest)
+    return()
+endif ()
+
+set(GTEST_DIR ${PROJECT_SOURCE_DIR}/deps/googletest/googletest)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads)
@@ -30,7 +34,7 @@ target_include_directories(gtest
 target_link_libraries(gtest PUBLIC Threads::Threads)
 
 
-set(GMOCK_DIR ${CMAKE_SOURCE_DIR}/deps/googletest/googlemock)
+set(GMOCK_DIR ${PROJECT_SOURCE_DIR}/deps/googletest/googlemock)
 
 add_library(gmock STATIC
         ${GMOCK_DIR}/src/gmock.cc

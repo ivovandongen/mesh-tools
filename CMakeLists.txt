@@ -1,12 +1,18 @@
 cmake_minimum_required(VERSION 3.22)
-project(mesh_tools)
+project(meshtools)
 
 set(CMAKE_CXX_STANDARD 17)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-# Options
+if (${CMAKE_SOURCE_DIR} STREQUAL ${PROJECT_SOURCE_DIR})
+    set(MESHTOOLS_SUB_BUILD OFF)
+else ()
+    message(STATUS "Sub-project build. Root SRC directory ${CMAKE_SOURCE_DIR} - Meshtools dir ${PROJECT_SOURCE_DIR}")
+    set(MESHTOOLS_SUB_BUILD ON)
+endif ()
 
+# Options
 option(ENABLE_CCACHE "Speed up incremental rebuilds via ccache" ON)
 option(ENABLE_CLANG_FORMAT "Check sources with clang-format" ON)
 option(ENABLE_CLANG_TIDY "Check sources with clang-tidy" ON)
@@ -16,18 +22,18 @@ option(ENABLE_TESTS "Enable tests" ON)
 option(ENABLE_ADDRESS_SANITIZER "Enable Asan https://clang.llvm.org/docs/AddressSanitizer.html" OFF)
 
 # CMake modules
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/")
 
 # Load CMake modules
-include(${CMAKE_MODULE_PATH}/git.cmake)
-include(${CMAKE_MODULE_PATH}/ccache.cmake)
-include(${CMAKE_MODULE_PATH}/clang-format.cmake)
-include(${CMAKE_MODULE_PATH}/clang-tidy.cmake)
-include(${CMAKE_MODULE_PATH}/include_vendor_pkg.cmake)
-include(${CMAKE_MODULE_PATH}/include_guard.cmake)
-include(${CMAKE_MODULE_PATH}/module.cmake)
-include(${CMAKE_MODULE_PATH}/module_tests.cmake)
-include(${CMAKE_MODULE_PATH}/objective_cpp.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/git.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/ccache.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/clang-format.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/clang-tidy.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/include_vendor_pkg.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/include_guard.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/module.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/module_tests.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/objective_cpp.cmake)
 
 # Sanitation
 if (ENABLE_ADDRESS_SANITIZER)
@@ -55,11 +61,33 @@ target_link_libraries(
         $<$<BOOL:${ENABLE_ADDRESS_SANITIZER}>:-fsanitize=address>
 )
 
+install(TARGETS meshtools-general-compile-options EXPORT MeshtoolsTargets
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+        INCLUDES DESTINATION include
+        )
+
 # Add modules
 add_subdirectory(modules)
 
-# Add tests
-if (ENABLE_TESTS)
-    enable_testing()
-    add_subdirectory(test)
+# Always enable testing for simplicity
+enable_testing()
+
+if (NOT MESHTOOLS_SUB_BUILD)
+    # Add tests
+    if (ENABLE_TESTS)
+        message(STATUS "Enabling tests")
+        add_subdirectory(test)
+    endif ()
+
+    export(EXPORT MeshtoolsDependenciesTargets
+            FILE "${CMAKE_CURRENT_BINARY_DIR}/Meshtools/MeshtoolsDependenciesTargets.cmake"
+            NAMESPACE Meshtools::Dependencies
+            )
+
+    export(EXPORT MeshtoolsTargets
+            FILE "${CMAKE_CURRENT_BINARY_DIR}/Meshtools/MeshtoolsTargets.cmake"
+            NAMESPACE Meshtools::
+            )
 endif ()
