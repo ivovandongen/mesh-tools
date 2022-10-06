@@ -99,23 +99,6 @@ models::Extra fromValue(const tinygltf::Value& value) {
     return {std::monostate()};
 }
 
-std::string text(tinygltf::Model& model) {
-    std::stringstream os;
-    tinygltf::TinyGLTF tiny;
-    tiny.SetSerializeDefaultValues(false);
-    tiny.WriteGltfSceneToStream(&model, os, true, false);
-    return os.str();
-}
-
-std::vector<char> binary(tinygltf::Model& model) {
-    std::stringstream os;
-    tinygltf::TinyGLTF tiny;
-    tiny.SetSerializeDefaultValues(false);
-    tiny.WriteGltfSceneToStream(&model, os, false, true);
-    auto str = os.str();
-    return std::vector<char>{str.begin(), str.end()};
-}
-
 // Stub
 bool loadImageDataFunction(tinygltf::Image*, const int, std::string*, std::string*, int, int, const unsigned char*, int,
                            void* user_pointer) {
@@ -499,62 +482,7 @@ void parseMaterials(const tinygltf::Model& gltfModel, Model& model) {
     });
 }
 
-ModelLoadResult LoadModel(const std::filesystem::path& file) {
-
-    tinygltf::Model gltfModel;
-    tinygltf::TinyGLTF loader;
-    //    loader.SetImageLoader(&loadImageDataFunction, nullptr);
-    loader.SetImageWriter(&writeImageDataFunction, nullptr);
-
-    std::string err;
-    std::string warn;
-    bool result;
-    if (string::endsWith(file, ".gltf")) {
-        result = loader.LoadASCIIFromFile(&gltfModel, &err, &warn, file);
-    } else if (string::endsWith(file, ".glb")) {
-        result = loader.LoadBinaryFromFile(&gltfModel, &err, &warn, file);
-    } else {
-        logging::error("Unknown file format: {}", file.c_str());
-        result = false;
-    }
-
-    if (!warn.empty()) {
-        logging::warn("Warn: {}", warn.c_str());
-    }
-
-    if (!result || !err.empty()) {
-        logging::error("Err: {}", warn.c_str());
-        return {err};
-    }
-
-    auto model = std::make_shared<Model>();
-
-    parseImages(gltfModel, *model);
-    parseSamplers(gltfModel, *model);
-    parseTextures(gltfModel, *model);
-    parseMaterials(gltfModel, *model);
-    parseMeshes(gltfModel, *model);
-    parseNodes(gltfModel, *model);
-
-    return {std::move(model)};
-}
-
-
-void write(tinygltf::Model& gltfModel, const std::filesystem::path& file) {
-    // Write out
-    if (string::endsWith(file.string(), ".gltf")) {
-        std::ofstream out(file);
-        out << text(gltfModel);
-        out.close();
-    } else {
-        auto bin = binary(gltfModel);
-        std::ofstream output(file, std::ios::binary);
-        std::copy(bin.begin(), bin.end(), std::ostreambuf_iterator<char>(output));
-        output.close();
-    }
-}
-
-void write(const Model& model, const std::filesystem::path& outFile) {
+tinygltf::Model encode(const Model& model) {
     tinygltf::Model gltfModel;
     // Define the asset. The version is required
     gltfModel.asset.version = "2.0";
@@ -717,134 +645,109 @@ void write(const Model& model, const std::filesystem::path& outFile) {
 
 
     // Write out to disk
-    write(gltfModel, outFile);
+    return gltfModel;
 }
 
-void dump(const Model& model, const Image& aoMap, const std::filesystem::path& file) {
-    if (model.meshes(0, false).empty()) {
-        logging::warn("No meshes to dump into {}", file.c_str());
-        return;
+// Public API //
+
+ModelLoadResult LoadModel(const std::string& contents, bool binary) {
+    tinygltf::Model gltfModel;
+    tinygltf::TinyGLTF loader;
+    //    loader.SetImageLoader(&loadImageDataFunction, nullptr);
+    loader.SetImageWriter(&writeImageDataFunction, nullptr);
+
+    std::string err;
+    std::string warn;
+    bool result;
+    if (binary) {
+        result = loader.LoadBinaryFromMemory(&gltfModel,
+                                             &err,
+                                             &warn,
+                                             reinterpret_cast<const unsigned char*>(contents.c_str()),
+                                             contents.size(),
+                                             "");
+    } else {
+        result = loader.LoadASCIIFromString(&gltfModel, &err, &warn, contents.c_str(), contents.size(), "");
     }
+
+    if (!warn.empty()) {
+        logging::warn("Warn: {}", warn.c_str());
+    }
+
+    if (!result || !err.empty()) {
+        logging::error("Err: {}", warn.c_str());
+        return {err};
+    }
+
+    auto model = std::make_shared<Model>();
+
+    parseImages(gltfModel, *model);
+    parseSamplers(gltfModel, *model);
+    parseTextures(gltfModel, *model);
+    parseMaterials(gltfModel, *model);
+    parseMeshes(gltfModel, *model);
+    parseNodes(gltfModel, *model);
+
+    return {std::move(model)};
+}
+
+ModelLoadResult LoadModel(const std::filesystem::path& file) {
 
     tinygltf::Model gltfModel;
-    // Define the asset. The version is required
-    gltfModel.asset.version = "2.0";
-    gltfModel.asset.generator = "tinygltf";
+    tinygltf::TinyGLTF loader;
+    //    loader.SetImageLoader(&loadImageDataFunction, nullptr);
+    loader.SetImageWriter(&writeImageDataFunction, nullptr);
 
-    // Default scene
-    auto& scene = gltfModel.scenes.emplace_back();
-
-    // Add the buffer to the model
-    auto& buffer = gltfModel.buffers.emplace_back();
-
-    // Add AO image/texture/sampler
-    size_t aoTextureIndex = [&]() {
-        // Add the image to the buffer
-        auto imageBufferRange = appendToBuffer(buffer, aoMap.png());
-
-        // Add a BufferView for the image data
-        auto aoImageBufferViewIndex = addBufferView(gltfModel, buffer, imageBufferRange);
-
-        // Add an image
-        auto aoImageIndex = gltfModel.images.size();
-        auto& aoImage = gltfModel.images.emplace_back();
-        aoImage.bufferView = aoImageBufferViewIndex;
-        aoImage.mimeType = "image/png";
-
-        // Add the sampler
-        auto aoSamplerIndex = gltfModel.samplers.size();
-        auto& aoSampler = gltfModel.samplers.emplace_back();
-        aoSampler.name = "AO";
-        aoSampler.minFilter = TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR;
-        aoSampler.magFilter = TINYGLTF_TEXTURE_FILTER_LINEAR;
-
-        // Add the texture
-        auto& aoTexture = gltfModel.textures.emplace_back();
-        aoTexture.source = aoImageIndex;
-        aoTexture.sampler = aoSamplerIndex;
-        return gltfModel.textures.size() - 1;
-    }();
-
-
-    // Dump the first scene
-    for (auto& mesh : model.meshes(0, false)) {
-        // Add a node and mesh
-        gltfModel.meshes.emplace_back();
-        auto& node = gltfModel.nodes.emplace_back();
-        node.mesh = gltfModel.meshes.size() - 1;
-        scene.nodes.push_back(gltfModel.nodes.size() - 1);
-
-        // Add indices to buffer
-        auto& indexView = mesh->indices();
-        auto indicesBufferRange = appendToBuffer(buffer, indexView.buffer());
-
-        // Add a BufferView for the indices
-        auto indicesBufferViewIndex = addBufferView(gltfModel, buffer, indicesBufferRange, TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER);
-
-        // Add an accessor for the indices
-        auto indexAccessorIdx = gltfModel.accessors.size();
-        auto& indexAccessor = gltfModel.accessors.emplace_back();
-        indexAccessor.bufferView = indicesBufferViewIndex;
-        indexAccessor.componentType = componentType(indexView.dataType());
-        indexAccessor.count = indexView.size();
-        indexAccessor.type = TINYGLTF_TYPE_SCALAR;
-        // TODO: Min max
-        auto indices = mesh->indices<uint32_t>();
-        auto indexMinMax = std::minmax_element(indices.begin(), indices.end());
-        indexAccessor.maxValues.push_back(*indexMinMax.second);
-        indexAccessor.minValues.push_back(*indexMinMax.first);
-
-        // Add a primitive and a mesh
-        auto& primitive = gltfModel.meshes.back().primitives.emplace_back();
-        primitive.indices = indexAccessorIdx;
-        primitive.mode = TINYGLTF_MODE_TRIANGLES;
-
-        // Add a material
-        primitive.material = gltfModel.materials.size();
-        auto& material = gltfModel.materials.emplace_back();
-        material.name = mesh->name();
-        material.occlusionTexture.index = aoTextureIndex;
-
-        // Add the position data
-        {
-            auto& positionsTypedData = mesh->vertexAttribute(AttributeType::POSITION);
-            auto positionBufferRange = appendToBuffer(buffer, positionsTypedData.buffer());
-
-            // Add a BufferView for the positions
-            auto positionBufferViewIndex = addBufferView(gltfModel, buffer, positionBufferRange, TINYGLTF_TARGET_ARRAY_BUFFER);
-
-            // Add an accessor for the positions
-            primitive.attributes["POSITION"] = gltfModel.accessors.size();
-            auto& positionAccessor = gltfModel.accessors.emplace_back();
-            positionAccessor.bufferView = positionBufferViewIndex;
-            positionAccessor.componentType = componentType(positionsTypedData.dataType());
-            positionAccessor.count = positionsTypedData.size();
-            positionAccessor.type = typeFromComponentCount(positionsTypedData.componentCount());
-            //TODO min max
-            auto minMax = minmax(mesh->vertexAttribute<glm::vec3>(AttributeType::POSITION));
-            positionAccessor.minValues = std::vector<double>{minMax[0][0], minMax[0][1], minMax[0][2]};
-            positionAccessor.maxValues = std::vector<double>{minMax[1][0], minMax[1][1], minMax[1][2]};
-        }
-
-        // Add the uv data and albedo and baseColor texture
-        if (mesh->hasVertexAttribute(AttributeType::TEXCOORD)) {
-            auto& uvsTypedData = mesh->vertexAttribute(AttributeType::TEXCOORD);
-            auto uvBufferRange = appendToBuffer(buffer, uvsTypedData.buffer());
-
-            // Add a BufferView for the uvs
-            auto uvBufferViewIndex = addBufferView(gltfModel, buffer, uvBufferRange);
-
-            // Add an accessor for the uvs
-            primitive.attributes["TEXCOORD_0"] = gltfModel.accessors.size();
-            auto& uvAccessor = gltfModel.accessors.emplace_back();
-            uvAccessor.bufferView = uvBufferViewIndex;
-            uvAccessor.componentType = componentType(uvsTypedData.dataType());
-            uvAccessor.count = uvsTypedData.size();
-            uvAccessor.type = TINYGLTF_TYPE_VEC2;
-        }
+    std::string err;
+    std::string warn;
+    bool result;
+    if (string::endsWith(file, ".gltf")) {
+        result = loader.LoadASCIIFromFile(&gltfModel, &err, &warn, file);
+    } else if (string::endsWith(file, ".glb")) {
+        result = loader.LoadBinaryFromFile(&gltfModel, &err, &warn, file);
+    } else {
+        logging::error("Unknown file format: {}", file.c_str());
+        result = false;
     }
 
-    write(gltfModel, file);
+    if (!warn.empty()) {
+        logging::warn("Warn: {}", warn.c_str());
+    }
+
+    if (!result || !err.empty()) {
+        logging::error("Err: {}", warn.c_str());
+        return {err};
+    }
+
+    auto model = std::make_shared<Model>();
+
+    parseImages(gltfModel, *model);
+    parseSamplers(gltfModel, *model);
+    parseTextures(gltfModel, *model);
+    parseMaterials(gltfModel, *model);
+    parseMeshes(gltfModel, *model);
+    parseNodes(gltfModel, *model);
+
+    return {std::move(model)};
+}
+
+std::string text(const models::Model& model) {
+    auto encoded = encode(model);
+    std::stringstream os;
+    tinygltf::TinyGLTF tiny;
+    tiny.SetSerializeDefaultValues(false);
+    tiny.WriteGltfSceneToStream(&encoded, os, true, false);
+    return os.str();
+}
+
+std::vector<char> binary(const models::Model& model) {
+    auto encoded = encode(model);
+    std::stringstream os;
+    tinygltf::TinyGLTF tiny;
+    tiny.SetSerializeDefaultValues(false);
+    tiny.WriteGltfSceneToStream(&encoded, os, false, true);
+    auto str = os.str();
+    return std::vector<char>{str.begin(), str.end()};
 }
 
 } // namespace meshtools::models::gltf

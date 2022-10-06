@@ -20,6 +20,7 @@ using ModelLoadResult = Result<class Model>;
 class Model {
 public:
     static ModelLoadResult Load(const std::filesystem::path& path);
+    static ModelLoadResult Load(const std::string& contents, bool binary);
 
     Model(std::vector<MeshGroup> meshGroups, std::vector<Node> nodes);
 
@@ -170,9 +171,13 @@ public:
         return materials_;
     }
 
-    void dump(const Image& aoMap, const std::filesystem::path& file) const;
+    void merge(const Model& model);
 
     void write(const std::filesystem::path& outFile) const;
+
+    std::string text() const;
+
+    std::vector<char> binary() const;
 
 private:
     std::vector<MeshGroup> meshGroups_;

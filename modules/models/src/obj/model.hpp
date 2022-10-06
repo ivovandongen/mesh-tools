@@ -9,6 +9,4 @@ namespace meshtools::models::obj {
 
 ModelLoadResult loadModel(const std::filesystem::path& filename);
 
-void dump(const Model& model, const Image& aoMap, const std::filesystem::path& file);
-
 } // namespace meshtools::models::obj

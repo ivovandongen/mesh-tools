@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
 
     if (!options.outputDump.empty()) {
         logging::info("Writing dump to {}", options.outputDump.c_str());
-        modelLoadResult.value->dump(*bakeResult.value, options.outputDump);
+        modelLoadResult.value->write(options.outputDump);
     }
 
     if (!options.outputTexture.empty()) {

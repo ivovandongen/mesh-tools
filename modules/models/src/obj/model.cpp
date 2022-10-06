@@ -2,6 +2,8 @@
 
 #include <meshtools/file.hpp>
 #include <meshtools/logging.hpp>
+#include <meshtools/models/model.hpp>
+
 
 #include "tiny_obj_loader.h"
 
@@ -50,70 +52,6 @@ ModelLoadResult loadModel(const std::filesystem::path& file) {
 
     result.value = std::make_shared<Model>(std::move(meshes));
     return result;
-}
-
-void dump(const Model& model, const Image& aoMap, const std::filesystem::path& file) {
-    if (!file::parentDirExists(file)) {
-        logging::error("Directory for {} does not exist", file.c_str());
-        return;
-    }
-
-    FILE* outobj = fopen(file.c_str(), "wt");
-
-    size_t vertexCountBase = 0;
-    for (auto& meshGroup : model.meshGroups()) {
-        for (size_t i = 0; i < meshGroup.meshes().size(); i++) {
-            auto& modelMesh = meshGroup.meshes()[i];
-            if (modelMesh->name().empty()) {
-                fprintf(outobj, "o Object-%zu\n", i);
-            } else {
-                fprintf(outobj, "o %s\n", modelMesh->name().c_str());
-            }
-
-            // Vertex data
-            auto positions = modelMesh->vertexAttribute<glm::vec3>(AttributeType::POSITION);
-            auto normals = modelMesh->hasVertexAttribute(AttributeType::NORMAL)
-                                   ? std::optional<DataView<glm::vec3>>{modelMesh->vertexAttribute<glm::vec3>(AttributeType::NORMAL)}
-                                   : std::nullopt;
-            auto texcoords = modelMesh->hasVertexAttribute(AttributeType::TEXCOORD)
-                                     ? std::optional<DataView<glm::vec2>>{modelMesh->vertexAttribute<glm::vec2>(AttributeType::TEXCOORD)}
-                                     : std::nullopt;
-            for (size_t nvert = 0; nvert < positions.size(); nvert++) {
-                const auto& position = positions[nvert];
-
-                // Position
-                fprintf(outobj, "v %f %f %f\n", position[0], position[1], position[2]);
-
-                // Normal
-                if (normals) {
-                    const auto& normal = (*normals)[nvert];
-                    fprintf(outobj, "vn %f %f %f\n", normal[0], normal[1], normal[2]);
-                }
-
-                // UV
-                if (texcoords) {
-                    const auto& uv = (*texcoords)[nvert];
-                    // Flip y
-                    fprintf(outobj, "vt %f %f\n", uv[0], 1 - uv[1]);
-                }
-            }
-
-            // Faces
-            fprintf(outobj, "s %d\n", 0);
-            auto indices = modelMesh->indices<uint32_t>();
-            for (int nface = 0; nface < indices.size() / 3; nface++) {
-                int a = vertexCountBase + indices[nface * 3] + 1;
-                int b = vertexCountBase + indices[nface * 3 + 1] + 1;
-                int c = vertexCountBase + indices[nface * 3 + 2] + 1;
-                if (normals) {
-                    fprintf(outobj, "f %d/%d %d/%d %d/%d\n", a, a, b, b, c, c);
-                } else {
-                    fprintf(outobj, "f %d/%d/%d %d/%d/%d %d/%d/%d\n", a, a, a, b, b, b, c, c, c);
-                }
-            }
-            vertexCountBase += positions.size();
-        }
-    }
 }
 
 } // namespace meshtools::models::obj

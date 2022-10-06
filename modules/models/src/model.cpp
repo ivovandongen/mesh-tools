@@ -1,5 +1,6 @@
 #include <meshtools/models/model.hpp>
 
+#include <meshtools/file.hpp>
 #include <meshtools/logging.hpp>
 #include <meshtools/string.hpp>
 
@@ -46,20 +47,91 @@ ModelLoadResult Model::Load(const std::filesystem::path& path) {
     return loadResult;
 }
 
-void Model::dump(const Image& aoMap, const std::filesystem::path& file) const {
-    if (string::endsWith(file.string(), ".obj")) {
-        obj::dump(*this, aoMap, file);
-    } else if (string::endsWith(file.string(), ".gltf") || string::endsWith(file.string(), ".glb")) {
-        gltf::dump(*this, aoMap, file);
+ModelLoadResult Model::Load(const std::string& contents, bool binary) {
+    auto loadResult = gltf::LoadModel(contents, binary);
+
+    if (!loadResult) {
+        logging::error("Could not load model {}", loadResult.error);
+    }
+
+    return loadResult;
+}
+
+void Model::merge(const Model& model) {
+    // Images
+    auto imageOffset = images_.size();
+    images_.insert(images_.end(), model.images().begin(), model.images().end());
+
+    // Samplers
+    auto samplerOffset = samplers_.size();
+    samplers_.insert(samplers_.end(), model.samplers().begin(), model.samplers().end());
+
+    // textures
+    auto texturesOffset = textures_.size();
+    for (auto& texture : model.textures()) {
+        int sampler = texture.sampler > -1 ? texture.sampler + samplerOffset : -1;
+        int source = texture.source > -1 ? texture.source + imageOffset : -1;
+        textures_.push_back(Texture{sampler, source});
+    }
+
+    // Materials
+    auto materialOffset = materials_.size();
+    for (auto material : model.materials()) {
+        if (material.occlusionTexture > -1) {
+            material.occlusionTexture += texturesOffset;
+        }
+        if (material.pbrMetallicRoughness.baseColorTexture > -1) {
+            material.pbrMetallicRoughness.baseColorTexture += texturesOffset;
+        }
+        materials_.push_back(material);
+    }
+
+    // Meshes
+    auto meshOffset = meshGroups_.size();
+    for (auto& meshGroup : model.meshGroups()) {
+        auto& meshGroupNew = meshGroups_.emplace_back(meshGroup.name(), meshGroup.meshes(), meshGroup.extra());
+
+        // Update material references
+        for (auto& mesh : meshGroupNew.meshes()) {
+            if (mesh->materialIdx() > -1) {
+                mesh->materialIdx(mesh->materialIdx() + materialOffset);
+            }
+        }
+    }
+
+    // Nodes
+    // XXX: scene 0 only for now
+    for (auto& node : model.nodes(0)) {
+        auto meshIdx = node.mesh() ? std::optional<size_t>{*node.mesh() + meshOffset} : std::nullopt;
+
+        // Update scene
+        auto& newNode = nodes(0).emplace_back(meshIdx, node.extra(), node.transform());
+        newNode.visit([&](Node& node) {
+            if (node.mesh()) {
+                node.mesh(meshOffset + *node.mesh());
+            }
+        });
     }
 }
 
 void Model::write(const std::filesystem::path& file) const {
     if (string::endsWith(file.string(), ".obj")) {
         logging::warn("Write not implemented for obj");
-    } else if (string::endsWith(file.string(), ".gltf") || string::endsWith(file.string(), ".glb")) {
-        gltf::write(*this, file);
+    } else if (string::endsWith(file.string(), ".gltf")) {
+        auto encoded = text();
+        file::writeFile(file, encoded);
+    } else if (string::endsWith(file.string(), ".glb")) {
+        auto encoded = binary();
+        file::writeFile(file, encoded, true);
     }
+}
+
+std::string Model::text() const {
+    return gltf::text(*this);
+}
+
+std::vector<char> Model::binary() const {
+    return gltf::binary(*this);
 }
 
 } // namespace meshtools::models
