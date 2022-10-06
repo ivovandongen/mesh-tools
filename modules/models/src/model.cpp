@@ -89,6 +89,7 @@ void Model::merge(const Model& model) {
     // Meshes
     auto meshOffset = meshGroups_.size();
     for (auto& meshGroup : model.meshGroups()) {
+        // TODO: Copy meshes?
         auto& meshGroupNew = meshGroups_.emplace_back(meshGroup.name(), meshGroup.meshes(), meshGroup.extra());
 
         // Update material references
@@ -102,13 +103,11 @@ void Model::merge(const Model& model) {
     // Nodes
     // XXX: scene 0 only for now
     for (auto& node : model.nodes(0)) {
-        auto meshIdx = node.mesh() ? std::optional<size_t>{*node.mesh() + meshOffset} : std::nullopt;
-
         // Update scene
-        auto& newNode = nodes(0).emplace_back(meshIdx, node.extra(), node.transform());
+        auto& newNode = nodes(0).emplace_back(node.mesh(), node.extra(), node.transform());
         newNode.visit([&](Node& node) {
             if (node.mesh()) {
-                node.mesh(meshOffset + *node.mesh());
+                node.mesh(*node.mesh() + meshOffset);
             }
         });
     }
