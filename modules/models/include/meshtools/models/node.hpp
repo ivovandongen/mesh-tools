@@ -37,8 +37,8 @@ public:
         return children_;
     }
 
-    void extra(Extra extra) {
-        extra_ = std::move(extra);
+    Extra& extra() {
+        return extra_;
     }
 
     const Extra& extra() const {

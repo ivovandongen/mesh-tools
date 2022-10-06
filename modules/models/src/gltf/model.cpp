@@ -284,7 +284,7 @@ void parseNodes(const tinygltf::Model& gltfModel, Model& model) {
         out.mesh(in.mesh);
 
         // Extras
-        out.extra(fromValue(in.extras));
+        out.extra() = fromValue(in.extras);
 
         // Transform
         if (in.matrix.size() == 16) {
