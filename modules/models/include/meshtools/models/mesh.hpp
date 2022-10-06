@@ -1,6 +1,7 @@
 #pragma once
 
 #include <meshtools/algorithm.hpp>
+#include <meshtools/models/attribute_type.hpp>
 #include <meshtools/models/extras.hpp>
 #include <meshtools/models/mesh_data.hpp>
 
@@ -9,14 +10,6 @@
 #include <utility>
 
 namespace meshtools::models {
-
-enum class AttributeType {
-    POSITION,
-    NORMAL,
-    TEXCOORD,
-    COLOR,
-    UNKNOWN,
-};
 
 using VertexData = std::unordered_map<AttributeType, TypedData>;
 

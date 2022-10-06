@@ -175,40 +175,12 @@ constexpr meshtools::models::DataType dataType(const tinygltf::Accessor& accesso
     }
 }
 
-constexpr meshtools::models::AttributeType attributeType(const std::string& input) {
-    if (input == "POSITION") {
-        return meshtools::models::AttributeType::POSITION;
-    }
-
-    if (input == "NORMAL") {
-        return meshtools::models::AttributeType::NORMAL;
-    }
-
-    if (input == "TEXCOORD_0") {
-        return meshtools::models::AttributeType::TEXCOORD;
-    }
-
-    if (input == "COLOR_0") {
-        return meshtools::models::AttributeType::COLOR;
-    }
-
-    meshtools::logging::warn("Unknown vertex attribute type {}", input.c_str());
-    return meshtools::models::AttributeType::UNKNOWN;
+meshtools::models::AttributeType attributeType(const std::string& input) {
+    return {input};
 }
 
 std::string attributeType(const meshtools::models::AttributeType& input) {
-    switch (input) {
-        case meshtools::models::AttributeType::POSITION:
-            return "POSITION";
-        case meshtools::models::AttributeType::NORMAL:
-            return "NORMAL";
-        case meshtools::models::AttributeType::TEXCOORD:
-            return "TEXCOORD_0";
-        case meshtools::models::AttributeType::COLOR:
-            return "COLOR_0";
-        case meshtools::models::AttributeType::UNKNOWN:
-            return "UNKNOWN";
-    }
+    return input.name;
 }
 
 constexpr size_t componentCount(const tinygltf::Accessor& accessor) {
