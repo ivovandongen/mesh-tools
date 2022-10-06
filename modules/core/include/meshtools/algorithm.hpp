@@ -51,7 +51,7 @@ Cont<size_t> find_indices(const T& in, Fn&& fn) {
 }
 
 template<class O, template<typename...> class OutCont = std::vector, class T, class Fn>
-OutCont<O> transform(T& in, const Fn& uo) {
+OutCont<O> transform(const T& in, const Fn& uo) {
     OutCont<O> o{};
     o.reserve(in.size());
 
