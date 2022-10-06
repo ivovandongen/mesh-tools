@@ -500,7 +500,7 @@ tinygltf::Model encode(const Model& model) {
     for (size_t meshIdx = 0; meshIdx < model.meshGroups().size(); meshIdx++) {
         auto& meshGroup = model.meshGroups()[meshIdx];
         auto& gltfMesh = gltfModel.meshes[meshIdx];
-        gltfMesh.extras = toValue(meshGroup.extras());
+        gltfMesh.extras = toValue(meshGroup.extra());
 
         // Primitives
         for (auto& mesh : meshGroup.meshes()) {

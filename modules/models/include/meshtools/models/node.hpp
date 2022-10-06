@@ -46,6 +46,15 @@ public:
     }
 
     template<class Visitor>
+    void visit(const Visitor& visitor) {
+        visitor(*this);
+
+        for (auto& child : children()) {
+            child.visit(visitor);
+        }
+    }
+
+    template<class Visitor>
     void visit(const Visitor& visitor) const {
         visitor(*this);
 

@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cassert>
+#include <string>
 #include <unordered_map>
 #include <variant>
+#include <vector>
 
 namespace meshtools::models {
 

@@ -5,6 +5,7 @@
 #include <meshtools/math.hpp>
 #include <meshtools/models/material.hpp>
 #include <meshtools/models/mesh.hpp>
+#include <meshtools/models/mesh_group.hpp>
 #include <meshtools/models/node.hpp>
 #include <meshtools/models/sampler.hpp>
 #include <meshtools/models/texture.hpp>
@@ -77,39 +78,41 @@ public:
             const auto visitor = [&](const Node& node) {
                 auto meshIdx = node.mesh();
                 if (meshIdx) {
-                    const auto& orgMesh = mesh(*meshIdx);
-
+                    const auto& meshGroup = meshGroups_[*meshIdx];
                     // Cascade local transforms
                     cumulativeTransform = cumulativeTransform * node.transform();
 
-                    if (!applyLocalTransforms || cumulativeTransform == identity) {
-                        meshes.template emplace_back(orgMesh);
-                    } else {
-                        TypedData indices{
-                                orgMesh->indices().dataType(),
-                                orgMesh->indices().componentCount(),
-                                orgMesh->indices().buffer(),
-                        };
+                    for (auto& orgMesh : meshGroup.meshes()) {
 
-                        VertexData vertexData;
-                        for (const auto& va : orgMesh->vertexData()) {
-                            vertexData[va.first] = {va.second.dataType(), va.second.componentCount(), va.second.buffer()};
+                        if (!applyLocalTransforms || cumulativeTransform == identity) {
+                            meshes.template emplace_back(orgMesh);
+                        } else {
+                            TypedData indices{
+                                    orgMesh->indices().dataType(),
+                                    orgMesh->indices().componentCount(),
+                                    orgMesh->indices().buffer(),
+                            };
+
+                            VertexData vertexData;
+                            for (const auto& va : orgMesh->vertexData()) {
+                                vertexData[va.first] = {va.second.dataType(), va.second.componentCount(), va.second.buffer()};
+                            }
+
+                            // Transform positions
+                            DataView<glm::vec3> positions{vertexData[AttributeType::POSITION]};
+                            std::vector<glm::vec3> transformed;
+                            transformed.reserve(positions.size());
+                            for (auto& pos : positions) {
+                                transformed.emplace_back(cumulativeTransform * glm::vec4{pos, 1});
+                            }
+                            vertexData[AttributeType::POSITION].copyFrom(transformed.data());
+
+                            meshes.emplace_back(std::make_shared<Mesh>(orgMesh->name(),
+                                                                       orgMesh->materialIdx(),
+                                                                       std::move(indices),
+                                                                       std::move(vertexData),
+                                                                       orgMesh->extra()));
                         }
-
-                        // Transform positions
-                        DataView<glm::vec3> positions{vertexData[AttributeType::POSITION]};
-                        std::vector<glm::vec3> transformed;
-                        transformed.reserve(positions.size());
-                        for (auto& pos : positions) {
-                            transformed.emplace_back(cumulativeTransform * glm::vec4{pos, 1});
-                        }
-                        vertexData[AttributeType::POSITION].copyFrom(transformed.data());
-
-                        meshes.emplace_back(std::make_shared<Mesh>(orgMesh->name(),
-                                                                   orgMesh->materialIdx(),
-                                                                   std::move(indices),
-                                                                   std::move(vertexData),
-                                                                   orgMesh->extra()));
                     }
                 }
             };

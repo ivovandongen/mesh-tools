@@ -27,6 +27,10 @@ public:
     Mesh(Mesh&&) = default;
     Mesh& operator=(Mesh&&) = default;
 
+    TypedData& indices() {
+        return indices_;
+    }
+
     const TypedData& indices() const {
         return indices_;
     }
@@ -88,6 +92,10 @@ public:
         vertexData_ = std::move(vertexData);
     }
 
+    Extra& extra() {
+        return extra_;
+    }
+
     const Extra& extra() const {
         return extra_;
     }
@@ -97,45 +105,6 @@ private:
     int materialIdx_;
     TypedData indices_;
     VertexData vertexData_;
-    Extra extra_;
-};
-
-class MeshGroup {
-public:
-    MeshGroup(std::string name, std::shared_ptr<Mesh> mesh, Extra extra = {}) : name_(std::move(name)), extra_(std::move(extra)) {
-        meshes_.push_back(std::move(mesh));
-    }
-
-    MeshGroup(std::string name, std::vector<std::shared_ptr<Mesh>> meshes, Extra extra = {})
-        : name_(std::move(name)), meshes_(std::move(meshes)), extra_(std::move(extra)) {}
-
-    // Delete copy
-    MeshGroup(const MeshGroup&) = delete;
-    MeshGroup& operator=(const MeshGroup&) = delete;
-
-    // Keep move
-    MeshGroup(MeshGroup&&) = default;
-    MeshGroup& operator=(MeshGroup&&) = default;
-
-    const std::string& name() const {
-        return name_;
-    }
-
-    std::vector<std::shared_ptr<Mesh>>& meshes() {
-        return meshes_;
-    }
-
-    const std::vector<std::shared_ptr<Mesh>>& meshes() const {
-        return meshes_;
-    }
-
-    const Extra& extras() const {
-        return extra_;
-    }
-
-private:
-    std::string name_;
-    std::vector<std::shared_ptr<Mesh>> meshes_;
     Extra extra_;
 };
 

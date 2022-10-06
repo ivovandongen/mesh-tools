@@ -1,6 +1,7 @@
 #pragma once
 
 #include <meshtools/algorithm.hpp>
+#include <meshtools/logging.hpp>
 #include <meshtools/math.hpp>
 #include <meshtools/result.hpp>
 #include <meshtools/span.hpp>
@@ -88,21 +89,44 @@ inline size_t bytes(DataType dataType) {
     }
 }
 
+template<class T>
+inline DataType toDataType() {
+    if constexpr (std::is_same_v<char, T>) {
+        return DataType::BYTE;
+    } else if constexpr (std::is_same_v<unsigned char, T>) {
+        return DataType::U_BYTE;
+    } else if constexpr (std::is_same_v<int16_t, T>) {
+        return DataType::SHORT;
+    } else if constexpr (std::is_same_v<uint16_t, T>) {
+        return DataType::U_SHORT;
+    } else if constexpr (std::is_same_v<int32_t, T>) {
+        return DataType::INT;
+    } else if constexpr (std::is_same_v<uint32_t, T>) {
+        return DataType::U_INT;
+    } else if constexpr (std::is_same_v<float, T>) {
+        return DataType::FLOAT;
+    } else if constexpr (std::is_same_v<double, T>) {
+        return DataType::DOUBLE;
+    }
+    assert(false && "Unknown data type");
+    throw std::runtime_error("Unknown data type");
+}
+
 struct TypedData {
     struct Iterator {
         using iterator_category = std::forward_iterator_tag;
         using difference_type = std::size_t;
-        using value_type = span<const uint8_t>;
+        using value_type = span<uint8_t>;
         using pointer = value_type;
         using reference = value_type;
 
-        Iterator(const TypedData& typedData, difference_type index) : typedData_(&typedData), index_(index) {}
+        Iterator(TypedData& typedData, difference_type index) : typedData_(&typedData), index_(index) {}
 
-        const reference operator*() const {
+        reference operator*() const {
             return typedData_->operator[](index_);
         }
 
-        const pointer operator->() {
+        pointer operator->() {
             return typedData_->operator[](index_);
         }
 
@@ -126,13 +150,61 @@ struct TypedData {
 
     private:
         // Needs to be a pointer to keep the iterator copyable
+        TypedData* typedData_;
+        difference_type index_;
+    };
+
+    struct ConstIterator {
+        using iterator_category = std::forward_iterator_tag;
+        using difference_type = std::size_t;
+        using value_type = span<const uint8_t>;
+        using pointer = value_type;
+        using reference = value_type;
+
+        ConstIterator(const TypedData& typedData, difference_type index) : typedData_(&typedData), index_(index) {}
+
+        reference operator*() const {
+            return typedData_->operator[](index_);
+        }
+
+        pointer operator->() {
+            return typedData_->operator[](index_);
+        }
+
+        ConstIterator& operator++() {
+            index_++;
+            return *this;
+        }
+
+        ConstIterator operator++(int) {
+            ConstIterator tmp = *this;
+            index_++;
+            return tmp;
+        }
+
+        friend bool operator==(const ConstIterator& a, const ConstIterator& b) {
+            return a.index_ == b.index_;
+        }
+        friend bool operator!=(const ConstIterator& a, const ConstIterator& b) {
+            return a.index_ != b.index_;
+        }
+
+    private:
+        // Needs to be a pointer to keep the iterator copyable
         const TypedData* typedData_;
         difference_type index_;
     };
 
     using iterator = Iterator;
-    using const_iterator = Iterator;
+    using const_iterator = ConstIterator;
     using value_type = span<uint8_t>;
+
+    template<class T>
+    static TypedData From(size_t componentCount, const std::vector<T>& data) {
+        TypedData result(toDataType<T>(), componentCount, data.size() / componentCount);
+        result.copyFrom(data.data());
+        return result;
+    }
 
     TypedData(DataType dataType, size_t componentCount, std::vector<uint8_t> data)
         : dataType_(dataType), componentCount_(componentCount), data_(std::move(data)) {}
@@ -183,27 +255,35 @@ struct TypedData {
         return {data_.data() + pos * stride(), stride()};
     }
 
-    Iterator begin() {
+    iterator begin() {
         return {*this, 0};
     }
 
-    Iterator end() {
+    iterator end() {
         return {*this, size()};
     }
 
-    Iterator begin() const {
+    const_iterator begin() const {
         return {*this, 0};
     }
 
-    Iterator end() const {
+    const_iterator end() const {
         return {*this, size()};
+    }
+
+    void append(const TypedData& other) {
+        if (dataType_ != other.dataType_ || componentCount_ != other.componentCount_) {
+            logging::error("Data type or component count does not match");
+        }
+
+        data_.insert(data_.end(), other.data_.begin(), other.data_.end());
     }
 
     void copyTo(void* out) const {
         std::memcpy(out, data_.data(), data_.size());
     }
 
-    void copyFrom(void* in) {
+    void copyFrom(const void* in) {
         std::memcpy(data_.data(), in, data_.size());
     }
 
@@ -214,7 +294,6 @@ private:
     size_t componentCount_;
     std::vector<uint8_t> data_;
 };
-
 
 template<class T>
 struct DataView {
