@@ -10,11 +10,11 @@ public:
     span(T* start, std::size_t len) : start_{start}, len_{len} {}
 
     T& operator[](int i) {
-        return *start_[i];
+        return start_[i];
     }
 
     T const& operator[](int i) const {
-        return *start_[i];
+        return start_[i];
     }
 
     std::size_t size() const {
