@@ -643,8 +643,15 @@ tinygltf::Model encode(const Model& model) {
         }
     }
 
+    // Extensions
+    if (std::any_of(model.meshGroups().begin(), model.meshGroups().end(), [](const auto& group) {
+            return std::any_of(group.meshes().begin(), group.meshes().end(), [](const auto& mesh) {
+                return mesh->hasVertexAttribute({"_FEATURE_ID_0"});
+            });
+        })) {
+        gltfModel.extensionsUsed.emplace_back("EXT_mesh_features");
+    }
 
-    // Write out to disk
     return gltfModel;
 }
 
