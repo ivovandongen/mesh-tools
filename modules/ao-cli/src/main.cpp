@@ -1,4 +1,5 @@
 #include <meshtools/ao/ao.hpp>
+#include <meshtools/file.hpp>
 #include <meshtools/image.hpp>
 #include <meshtools/logging.hpp>
 #include <meshtools/models/model.hpp>
@@ -166,7 +167,8 @@ int main(int argc, char** argv) {
 
     if (!options.outputTexture.empty()) {
         logging::info("Writing texture to {}", options.outputTexture.c_str());
-        bakeResult.value->png(options.outputTexture);
+        auto png = bakeResult.value->png();
+        file::writeFile(options.outputTexture, png.data(), true);
     }
 
     { // Update the model with the AO Map
