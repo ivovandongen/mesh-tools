@@ -12,7 +12,6 @@
 #include <tiny_gltf.h>
 
 #include <algorithm>
-#include <set>
 #include <vector>
 
 namespace {
@@ -578,18 +577,31 @@ tinygltf::Model encode(const Model& model) {
     }
 
     if (!model.images().empty()) {
-
         // Images
-        auto& imageBuffer = gltfModel.buffers.emplace_back();
         for (auto& image : model.images()) {
+            Image::Type type;
+            std::vector<uint8_t> imageData;
+            if (image->type() == Image::Type::RAW) {
+                if (image->channels() == 4) {
+                    imageData = std::move(image->png().data());
+                    type = Image::Type::PNG;
+                } else {
+                    imageData = std::move(image->jpg().data());
+                    type = Image::Type::JPG;
+                }
+            } else {
+                imageData = image->data();
+                type = image->type();
+            }
+
             tinygltf::Image gltfImage{};
             gltfImage.width = image->width();
             gltfImage.height = image->height();
             gltfImage.component = image->channels();
-            gltfImage.mimeType = "image/png";
+            gltfImage.mimeType = type == Image::Type::PNG ? "image/png" : "image/jpeg";
 
-            auto imageBufferRange = appendToBuffer(imageBuffer, image->png());
-            auto bufferViewIndex = addBufferView(gltfModel, imageBuffer, imageBufferRange);
+            auto imageBufferRange = appendToBuffer(buffer, imageData);
+            auto bufferViewIndex = addBufferView(gltfModel, buffer, imageBufferRange);
             gltfImage.bufferView = bufferViewIndex;
             gltfModel.images.emplace_back(gltfImage);
         }
@@ -751,7 +763,9 @@ std::vector<char> binary(const models::Model& model) {
     auto encoded = encode(model);
     std::stringstream os;
     tinygltf::TinyGLTF tiny;
+    tiny.SetImageWriter(&writeImageDataFunction, nullptr);
     tiny.SetSerializeDefaultValues(false);
+    tiny.SetPreserveImageChannels(true);
     tiny.WriteGltfSceneToStream(&encoded, os, false, true);
     auto str = os.str();
     return std::vector<char>{str.begin(), str.end()};

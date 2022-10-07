@@ -13,20 +13,27 @@
 
 namespace meshtools {
 
-Image::Image(uint32_t width, uint32_t height, uint8_t channels) : width_(width), height_(height), channels_(channels) {
+Image::Image(uint32_t width, uint32_t height, uint8_t channels) : width_(width), height_(height), channels_(channels), type_(Type::RAW) {
     assert(width_ > 0);
     assert(height_ > 0);
     assert(channels_ > 0);
     data_.resize(width * height * channels);
 }
 
-std::vector<unsigned char> Image::png() const {
+Image::Image(uint32_t width, uint32_t height, uint8_t channels, Type type, std::vector<uint8_t> data)
+    : width_(width), height_(height), channels_(channels), type_(type), data_(std::move(data)) {
+    assert(width_ > 0);
+    assert(height_ > 0);
+    assert(channels_ > 0);
+}
+
+Image Image::png() const {
     std::vector<unsigned char> result{};
+    result.reserve(data_.size()); // conservative
     stbi_write_png_to_func(
             [](void* context, void* data, int size) {
                 auto out = (std::vector<unsigned char>*) context;
-                out->resize(size);
-                std::copy_n((unsigned char*) data, size, out->data());
+                std::copy_n((unsigned char*) data, size, std::back_inserter(*out));
             },
             &result,
             width(),
@@ -34,15 +41,24 @@ std::vector<unsigned char> Image::png() const {
             channels(),
             data().data(),
             width() * channels());
-    return result;
+    return Image{width_, height_, channels_, Type::PNG, std::move(result)};
 }
 
-void Image::png(const std::filesystem::path& file) const {
-    if (!file::parentDirExists(file)) {
-        logging::error("Directory for {} does not exist", file.c_str());
-        return;
-    }
-    stbi_write_png(file.c_str(), width(), height(), channels(), data().data(), width() * channels());
+Image Image::jpg(uint8_t quality) const {
+    std::vector<unsigned char> result{};
+    result.reserve(data_.size()); // conservative
+    stbi_write_jpg_to_func(
+            [](void* context, void* data, int size) {
+                auto out = (std::vector<unsigned char>*) context;
+                std::copy_n((unsigned char*) data, size, std::back_inserter(*out));
+            },
+            &result,
+            width(),
+            height(),
+            channels(),
+            data().data(),
+            quality);
+    return Image{width_, height_, channels_, Type::JPG, std::move(result)};
 }
 
 void Image::blur(uint8_t blurKernelSize) {
