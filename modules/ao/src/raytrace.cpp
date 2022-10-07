@@ -133,6 +133,8 @@ Result<Image> raytrace(const std::vector<std::shared_ptr<models::Mesh>>& meshes,
                 auto uv = texcoordsView[index];
                 uv[0] *= uscale;
                 uv[1] *= vscale;
+                std::clamp(uv[0], 0.0f, (float) image->width());
+                std::clamp(uv[1], 0.0f, (float) image->height());
                 assert(uv[0] <= image->width());
                 assert(uv[1] <= image->height());
                 triangle[k] = {positionsView[index], normalsView[index], uv};
