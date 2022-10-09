@@ -79,14 +79,15 @@ public:
             const auto visitor = [&](const Node& node) {
                 auto meshIdx = node.mesh();
                 if (meshIdx) {
+                    assert(*meshIdx < meshGroups_.size());
                     const auto& meshGroup = meshGroups_[*meshIdx];
                     // Cascade local transforms
                     cumulativeTransform = cumulativeTransform * node.transform();
 
-                    for (auto& orgMesh : meshGroup.meshes()) {
+                    for (const auto& orgMesh : meshGroup.meshes()) {
 
                         if (!applyLocalTransforms || cumulativeTransform == identity) {
-                            meshes.template emplace_back(orgMesh);
+                            meshes.emplace_back(orgMesh);
                         } else {
                             TypedData indices{
                                     orgMesh->indices().dataType(),

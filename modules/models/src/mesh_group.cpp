@@ -63,6 +63,7 @@ void MeshGroup::merge(bool discardMaterials) {
 
         // Copy all vertex attributes
         for (const auto& vaIn : mesh->vertexData()) {
+            assert(vaIn.second.size() == positionCount);
             auto& va = accumulator->vertexAttribute(vaIn.first);
             va.append(vaIn.second);
         }
