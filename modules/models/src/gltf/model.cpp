@@ -565,17 +565,25 @@ tinygltf::Model encode(const Model& model) {
     }
 
 
-    // TODO: Write nodes
+    // Write nodes and scene indices
     gltfScene.nodes.resize(model.nodes(0).size());
     std::generate(gltfScene.nodes.begin(), gltfScene.nodes.end(), [n = 0]() mutable { return n++; });
 
     for (auto& node : model.nodes(0)) {
-        // TODO: child nodes
-        // TODO: transform
-        tinygltf::Node gltfNode{};
-        gltfNode.mesh = node.mesh() ? *node.mesh() : -1;
-        gltfNode.extras = toValue(node.extra());
-        gltfModel.nodes.push_back(gltfNode);
+        node.visit(
+                [&](const Node& node, std::optional<size_t> parentNodeIdx) {
+                    auto nodeIdx = gltfModel.nodes.size();
+                    tinygltf::Node gltfNode{};
+                    gltfNode.mesh = node.mesh() ? *node.mesh() : -1;
+                    gltfNode.extras = toValue(node.extra());
+                    gltfModel.nodes.push_back(gltfNode);
+
+                    if (parentNodeIdx) {
+                        gltfModel.nodes[*parentNodeIdx].children.push_back(nodeIdx);
+                    }
+                    return nodeIdx;
+                },
+                std::optional<size_t>{});
     }
 
     if (!model.images().empty()) {
