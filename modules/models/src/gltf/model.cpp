@@ -465,6 +465,7 @@ void parseMaterials(const tinygltf::Model& gltfModel, Model& model) {
     model.materials() = transform<Material>(gltfModel.materials, [](const tinygltf::Material& material) {
         Material out{};
 
+        out.name = material.name;
         out.pbrMetallicRoughness.baseColorTexture = material.pbrMetallicRoughness.baseColorTexture.index;
         out.pbrMetallicRoughness.baseColorFactor = glm::vec4{material.pbrMetallicRoughness.baseColorFactor[0],
                                                              material.pbrMetallicRoughness.baseColorFactor[1],

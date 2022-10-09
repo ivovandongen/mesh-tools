@@ -17,6 +17,7 @@ struct PBRMetallicRoughness {
 };
 
 struct Material {
+    std::string name;
     PBRMetallicRoughness pbrMetallicRoughness{};
     int occlusionTexture = -1;
     std::string alphaMode = "OPAQUE";
