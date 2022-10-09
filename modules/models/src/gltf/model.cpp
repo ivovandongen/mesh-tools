@@ -546,12 +546,26 @@ tinygltf::Model encode(const Model& model) {
                 gltfAccessor.componentType = componentType(typedData.dataType());
                 gltfAccessor.count = typedData.size();
                 gltfAccessor.type = typeFromComponentCount(typedData.componentCount());
-                //TODO min max
+
+                // Min-max for positions (required)
                 if (va.first == AttributeType::POSITION) {
                     auto minMax = minmax(mesh->vertexAttribute<glm::vec3>(AttributeType::POSITION));
                     gltfAccessor.minValues = std::vector<double>{minMax[0][0], minMax[0][1], minMax[0][2]};
                     gltfAccessor.maxValues = std::vector<double>{minMax[1][0], minMax[1][1], minMax[1][2]};
                 }
+            }
+
+            // EXT_mesh_features extension
+            if (mesh->vertexData().find({"_FEATURE_ID_0"}) != mesh->vertexData().end()) {
+                gltfPrimitive.extensions["EXT_mesh_features"] = toValue(Extras{{
+                        {
+                                "featureIds",
+                                ExtraArray{Extras{{
+                                        {"attribute", 0},
+                                        {"featureCount", (int32_t) mesh->vertexAttribute({"_FEATURE_ID_0"}).size()},
+                                }}},
+                        },
+                }});
             }
 
             // Material
