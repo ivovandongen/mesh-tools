@@ -188,10 +188,15 @@ struct TypedData {
     using value_type = span<uint8_t>;
 
     template<class T>
-    static TypedData From(size_t componentCount, const std::vector<T>& data) {
-        TypedData result(toDataType<T>(), componentCount, data.size() / componentCount);
+    static TypedData From(DataType dataType, size_t componentCount, const std::vector<T>& data) {
+        TypedData result(dataType, componentCount, data.size() * sizeof(T) / bytes(dataType) / componentCount);
         result.copyFrom(data.data());
         return result;
+    }
+
+    template<class T>
+    static TypedData From(size_t componentCount, const std::vector<T>& data) {
+        return From(toDataType<T>(), componentCount, data);
     }
 
     TypedData(DataType dataType, size_t componentCount, std::vector<uint8_t> data)
@@ -261,7 +266,9 @@ struct TypedData {
 
     void append(const TypedData& other) {
         if (dataType_ != other.dataType_ || componentCount_ != other.componentCount_) {
+            // TODO: error handling
             logging::error("Data type or component count does not match");
+            assert(false);
         }
 
         data_.insert(data_.end(), other.data_.begin(), other.data_.end());

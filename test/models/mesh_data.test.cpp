@@ -224,3 +224,23 @@ TEST(MeshData, Copy) {
         }
     }
 }
+
+TEST(MeshData, FromBuiltIn) {
+    std::vector<uint32_t> data{0, 1, 2, 3, 4, 5};
+    auto typedData = TypedData::From(1, data);
+    ASSERT_EQ(data.size(), typedData.size());
+    for (size_t i = 0; i < typedData.size(); i++) {
+        ASSERT_EQ(*((uint32_t*) typedData[i].begin()), data[i]);
+    }
+    typedData = TypedData::From(3, data);
+    ASSERT_EQ(typedData.size(), data.size() / 3);
+}
+
+TEST(MeshData, FromUserDefined) {
+    std::vector<glm::vec3> data{{0, 1, 2}, {3, 4, 5}};
+    auto typedData = TypedData::From(DataType::FLOAT, 3, data);
+    ASSERT_EQ(data.size(), typedData.size());
+    for (size_t i = 0; i < typedData.size(); i++) {
+        ASSERT_EQ(*((glm::vec3*) typedData[i].begin()), data[i]);
+    }
+}
