@@ -131,6 +131,34 @@ TEST(MeshData, DataViewIterableComplexType) {
     }
 }
 
+TEST(MeshData, DataViewIterableIntegralConversion) {
+    std::vector<uint16_t> data{0, 1, 2, 3, 4, 5, 6, 7};
+    TypedData typedData = TypedData::From(1, data);
+    DataView<uint32_t> dataView{typedData};
+
+    // For loop
+    auto idx = 0;
+    for (auto& d : dataView) {
+        ASSERT_EQ(d, data[idx]);
+        idx++;
+    }
+}
+
+TEST(MeshData, DataViewIterableComplexTypeConversion) {
+    std::vector<uint16_t> data{0, 1, 2, 3, 4, 5};
+    TypedData typedData = TypedData::From(3, data);
+    DataView<glm::u32vec3> dataView{typedData};
+
+    // For loop
+    auto idx = 0;
+    for (auto& d : dataView) {
+        ASSERT_FLOAT_EQ(d[0], idx * 3);
+        ASSERT_FLOAT_EQ(d[1], idx * 3 + 1);
+        ASSERT_FLOAT_EQ(d[2], idx * 3 + 2);
+        idx++;
+    }
+}
+
 TEST(MeshData, DataViewAlgorithms) {
     std::vector<uint32_t> data{0, 5, 3, 9, 2, 7};
     std::vector<unsigned char> raw;

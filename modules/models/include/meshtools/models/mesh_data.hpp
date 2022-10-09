@@ -12,46 +12,33 @@
 namespace meshtools::models {
 
 namespace detail {
-template<class T>
-inline T copy(const uint8_t* data, size_t componentByteSize) {
-    assert(componentByteSize <= sizeof(T));
-    T result{};
-    memcpy(&result, data, componentByteSize);
-    return result;
-}
 
+template<typename T, bool = std::is_arithmetic<T>::value>
+struct Converter {};
 
-template<class T>
-inline T convert(const uint8_t* data, size_t componentByteSize);
+template<typename T>
+struct Converter<T, true> {
 
-template<>
-inline glm::vec2 convert<glm::vec2>(const uint8_t* data, size_t componentByteSize) {
-    glm::vec2 result{};
-    result[0] = copy<float>(data, componentByteSize);
-    result[1] = copy<float>(data + componentByteSize, componentByteSize);
-    return result;
-}
+    T operator()(const uint8_t* data, size_t /*components*/, size_t componentByteSize) {
+        assert(componentByteSize <= sizeof(T));
+        T result{};
+        memcpy(&result, data, componentByteSize);
+        return result;
+    }
+};
 
-template<>
-inline glm::vec3 convert<glm::vec3>(const uint8_t* data, size_t componentByteSize) {
-    glm::vec3 result{};
-    result[0] = copy<float>(data, componentByteSize);
-    result[1] = copy<float>(data + componentByteSize, componentByteSize);
-    result[2] = copy<float>(data + componentByteSize * 2, componentByteSize);
-    return result;
-}
+template<typename T>
+struct Converter<T, false> {
 
-template<>
-inline uint32_t convert<uint32_t>(const uint8_t* data, size_t componentByteSize) {
-    assert(componentByteSize <= sizeof(uint32_t));
-    return copy<uint32_t>(data, componentByteSize);
-}
-
-template<>
-inline uint16_t convert<uint16_t>(const uint8_t* data, size_t componentByteSize) {
-    assert(componentByteSize <= sizeof(uint16_t));
-    return copy<uint16_t>(data, componentByteSize);
-}
+    T operator()(const uint8_t* data, size_t components, size_t componentByteSize) {
+        assert(componentByteSize <= sizeof(T));
+        T result{};
+        for (size_t i = 0; i < components; i++) {
+            memcpy(&result[i], data + i * componentByteSize, componentByteSize);
+        }
+        return result;
+    }
+};
 
 } // namespace detail
 
@@ -90,7 +77,7 @@ inline size_t bytes(DataType dataType) {
 }
 
 template<class T>
-inline DataType toDataType() {
+constexpr inline DataType toDataType() {
     if constexpr (std::is_same_v<char, T>) {
         return DataType::BYTE;
     } else if constexpr (std::is_same_v<unsigned char, T>) {
@@ -107,9 +94,10 @@ inline DataType toDataType() {
         return DataType::FLOAT;
     } else if constexpr (std::is_same_v<double, T>) {
         return DataType::DOUBLE;
+    } else {
+        // Unmapped type
+        static_assert(!sizeof(T), "Unknown data type");
     }
-    assert(false && "Unknown data type");
-    throw std::runtime_error("Unknown data type");
 }
 
 struct TypedData {
@@ -344,7 +332,8 @@ struct DataView {
         // optimize for actual format
         // TODO: check alignment
         if (data.stride() != sizeof(T)) {
-            view_ = transform<T>(data, [](auto raw) { return detail::convert<T>(raw.begin(), raw.size()); });
+            detail::Converter<T> converter;
+            view_ = transform<T>(data, [&](auto raw) { return converter(raw.begin(), data.componentCount(), data.componentSize()); });
         }
     }
 
