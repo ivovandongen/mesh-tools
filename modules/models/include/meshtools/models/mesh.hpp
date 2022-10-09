@@ -84,6 +84,10 @@ public:
         vertexData_.erase(attribute);
     }
 
+    VertexData& vertexData() {
+        return vertexData_;
+    }
+
     const VertexData& vertexData() const {
         return vertexData_;
     }
