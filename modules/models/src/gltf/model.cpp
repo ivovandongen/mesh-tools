@@ -487,6 +487,7 @@ tinygltf::Model encode(const Model& model) {
     // Define the asset. The version is required
     gltfModel.asset.version = "2.0";
     gltfModel.asset.generator = "tinygltf";
+    gltfModel.extras = toValue(model.extra());
 
     // Default scene
     auto& gltfScene = gltfModel.scenes.emplace_back();

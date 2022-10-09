@@ -12,7 +12,7 @@
 
 namespace meshtools::models {
 
-Model::Model(std::vector<MeshGroup> meshGroups) : meshGroups_(std::move(meshGroups)) {
+Model::Model(std::vector<MeshGroup> meshGroups, Extra extra) : meshGroups_(std::move(meshGroups)), extra_(std::move(extra)) {
     auto& scene = scenes_[0];
     scene.reserve(meshGroups_.size());
     for (size_t i = 0; i < meshGroups_.size(); i++) {
@@ -20,8 +20,8 @@ Model::Model(std::vector<MeshGroup> meshGroups) : meshGroups_(std::move(meshGrou
     }
 }
 
-Model::Model(std::vector<MeshGroup> meshGroups, std::vector<Node> nodes)
-    : meshGroups_(std::move(meshGroups)), scenes_({std::move(nodes)}) {}
+Model::Model(std::vector<MeshGroup> meshGroups, std::vector<Node> nodes, Extra extra)
+    : meshGroups_(std::move(meshGroups)), scenes_({std::move(nodes)}), extra_(std::move(extra)) {}
 
 Model::Model() = default;
 

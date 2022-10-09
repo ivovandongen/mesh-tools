@@ -3,6 +3,7 @@
 #include <meshtools/algorithm.hpp>
 #include <meshtools/image.hpp>
 #include <meshtools/math.hpp>
+#include <meshtools/models/extras.hpp>
 #include <meshtools/models/material.hpp>
 #include <meshtools/models/mesh.hpp>
 #include <meshtools/models/mesh_group.hpp>
@@ -23,9 +24,9 @@ public:
     static ModelLoadResult Load(const std::filesystem::path& path);
     static ModelLoadResult Load(const std::string& contents, bool binary);
 
-    Model(std::vector<MeshGroup> meshGroups, std::vector<Node> nodes);
+    Model(std::vector<MeshGroup> meshGroups, std::vector<Node> nodes, Extra extra = {});
 
-    explicit Model(std::vector<MeshGroup> meshGroups);
+    explicit Model(std::vector<MeshGroup> meshGroups, Extra extra = {});
 
     explicit Model();
 
@@ -67,8 +68,8 @@ public:
         assert(false);
     }
 
-    const std::vector<std::shared_ptr<Mesh>> meshes(size_t scene, bool applyLocalTransforms,
-                                                    const glm::mat4& rootTransform = glm::mat4{1}) const {
+    std::vector<std::shared_ptr<Mesh>> meshes(size_t scene, bool applyLocalTransforms,
+                                              const glm::mat4& rootTransform = glm::mat4{1}) const {
         const constexpr glm::mat4 identity{1};
         assert(scene < scenes_.size());
         auto& nodes = scenes_[scene];
@@ -174,6 +175,14 @@ public:
         return materials_;
     }
 
+    Extra& extra() {
+        return extra_;
+    }
+
+    const Extra& extra() const {
+        return extra_;
+    }
+
     void merge(const Model& model);
 
     void write(const std::filesystem::path& outFile) const;
@@ -189,6 +198,7 @@ private:
     std::vector<Sampler> samplers_;
     std::vector<Texture> textures_;
     std::vector<Material> materials_;
+    Extra extra_;
 };
 
 } // namespace meshtools::models
