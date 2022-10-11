@@ -120,9 +120,22 @@ void Atlas::apply(std::vector<std::shared_ptr<models::Mesh>>& meshes) {
 
         // Set new index buffer
         // TODO: get raw view on vector and copy in one go
-        models::TypedData indices{models::DataType::U_INT, 1, atlasMesh.indexCount};
-        indices.copyFrom(atlasMesh.indexArray);
-        modelMesh->indices(std::move(indices));
+        if (modelMesh->indices().dataType() == models::DataType::U_SHORT) {
+            std::vector<uint16_t> indices{};
+            indices.reserve(atlasMesh.indexCount);
+            std::transform(atlasMesh.indexArray,
+                           atlasMesh.indexArray + atlasMesh.indexCount,
+                           std::back_inserter(indices),
+                           [](const uint32_t index) {
+                               assert(index < std::numeric_limits<uint16_t>::max());
+                               return (uint16_t) index;
+                           });
+            modelMesh->indices(models::TypedData::From(1, indices));
+        } else {
+            models::TypedData indices{models::DataType::U_INT, 1, atlasMesh.indexCount};
+            indices.copyFrom(atlasMesh.indexArray);
+            modelMesh->indices(std::move(indices));
+        }
 
         // Set all the updated vertex data
         modelMesh->vertexData(std::move(vertexData));
